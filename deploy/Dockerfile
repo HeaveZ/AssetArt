@@ -90,11 +90,13 @@ RUN apk add --no-cache tini openssl libc6-compat \
 
 ENV NODE_ENV=production
 
-COPY --from=builder --chown=app:app /app/prisma              ./prisma
-COPY --from=builder --chown=app:app /app/prisma.config.ts    ./prisma.config.ts
-COPY --from=builder --chown=app:app /app/package.json        ./package.json
+# --chmod=0555 (dir+exec, no write): migrator sadece read-only çalışır,
+# prisma migrate deploy yalnızca DB'ye yazar; FS'e yazma izni gerek değil.
+COPY --from=builder --chown=app:app --chmod=0555 /app/prisma              ./prisma
+COPY --from=builder --chown=app:app --chmod=0555 /app/prisma.config.ts    ./prisma.config.ts
+COPY --from=builder --chown=app:app --chmod=0555 /app/package.json        ./package.json
 # Tam node_modules: prisma CLI'ın transitive deps'leri (effect, fast-check, vb.)
-COPY --from=builder --chown=app:app /app/node_modules        ./node_modules
+COPY --from=builder --chown=app:app --chmod=0555 /app/node_modules        ./node_modules
 
 RUN printf '#!/bin/sh\nset -e\necho "[migrator] running prisma migrate deploy"\nnode ./node_modules/prisma/build/index.js migrate deploy\necho "[migrator] done"\n' > /entrypoint.sh \
  && chmod +x /entrypoint.sh \
