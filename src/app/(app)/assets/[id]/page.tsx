@@ -17,7 +17,6 @@ import { AssetDetailHero } from "@/frontend/components/app/assets/asset-detail-h
 import { EmptyState } from "@/frontend/components/app/empty-state";
 import { UserAvatar } from "@/frontend/components/ui/avatar";
 import { Badge } from "@/frontend/components/ui/badge";
-import { AssetStatusBadge } from "@/frontend/components/app/status-badge";
 import {
   ASSET_STATUS_META,
   LEASE_STATUS_META,

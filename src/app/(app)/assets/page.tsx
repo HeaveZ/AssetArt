@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { FileUp, Plus } from "lucide-react";
 import { auth } from "@/auth";
 import { PageHeader } from "@/frontend/components/app/page-header";
 import { Button } from "@/frontend/components/ui/button";
@@ -69,11 +69,18 @@ export default async function AssetsPage({
           </div>
         }
         actions={
-          <Button asChild variant="primary" size="md">
-            <Link href="/assets/new">
-              <Plus /> New asset
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="secondary" size="md">
+              <Link href="/assets/import">
+                <FileUp /> Bulk CSV
+              </Link>
+            </Button>
+            <Button asChild variant="primary" size="md">
+              <Link href="/assets/new">
+                <Plus /> New asset
+              </Link>
+            </Button>
+          </>
         }
       />
 

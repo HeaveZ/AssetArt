@@ -181,3 +181,66 @@ export async function getAssetFacets(workspaceId: string): Promise<AssetFacets> 
   ]);
   return { sites, categories, assignees };
 }
+
+export type AssetFormData = {
+  sites: { id: string; name: string }[];
+  locations: { id: string; name: string; siteId: string }[];
+  categories: { id: string; name: string }[];
+  assignees: { id: string; name: string | null; email: string }[];
+};
+
+export async function getAssetFormData(workspaceId: string): Promise<AssetFormData> {
+  const [sites, locations, categories, assignees] = await Promise.all([
+    prisma.site.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.location.findMany({
+      where: { site: { workspaceId } },
+      select: { id: true, name: true, siteId: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.category.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { workspaceId, deletedAt: null },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+  return { sites, locations, categories, assignees };
+}
+
+export async function getAssetForEdit(workspaceId: string, id: string) {
+  return prisma.asset.findFirst({
+    where: { id, workspaceId, deletedAt: null },
+    select: {
+      id: true,
+      tag: true,
+      name: true,
+      brand: true,
+      model: true,
+      serialNumber: true,
+      description: true,
+      categoryId: true,
+      siteId: true,
+      locationId: true,
+      assigneeId: true,
+      status: true,
+      purchaseDate: true,
+      purchasePrice: true,
+      currency: true,
+      warrantyEndsAt: true,
+      cpu: true,
+      memoryGB: true,
+      storageGB: true,
+      displayInches: true,
+      os: true,
+      notes: true,
+    },
+  });
+}

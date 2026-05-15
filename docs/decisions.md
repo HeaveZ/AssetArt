@@ -2,6 +2,28 @@
 
 > Append-only record of product/architecture choices that deviate from or extend the spec in `CLAUDE_CODE_PROMPT.md`. Newest at top.
 
+## 2026-05-15 — M4 assets write + AI auto-fill
+
+### D-013 Multi-step form architecture
+- One `useForm` instance with the master `createAssetSchema`. Per-step validation runs via `form.trigger(STEP_FIELDS[index])` before moving forward. Schemas (`assetBasicsSchema` / `assetSpecsSchema` / `assetAssignmentSchema`) were already split — we reuse them via the master composition without re-defining sub-forms.
+- Resolver is cast to `Resolver<CreateAssetInput>` because zod's `.default()` makes input/output types diverge. The cast is local to `asset-form.tsx`; everywhere else (action input, child components) uses the output type for clarity.
+
+### D-014 Photo step deferred
+- Step 4 (Photos) renders a placeholder card until UploadThing is wired in M11. The form values for other steps are preserved when the user clicks Next from this step.
+
+### D-015 Date inputs
+- Native `<input type="date">` instead of `react-day-picker` for now. Cheap, accessible, works in all target browsers. Premium calendar picker can replace it in M11 polish.
+
+### D-016 AI auto-categorize endpoint
+- `backend/services/ai-categorize.ts` hits `claude-sonnet-4-6` via `@anthropic-ai/sdk`. System prompt is `cache_control: ephemeral` so repeat calls in a session hit the prompt cache (90% discount per Anthropic).
+- The model is asked to return ONLY JSON (no fence). We strip fences defensively and validate against `aiCategorizeResultSchema`. On any failure we degrade to `{ confidence: 0 }` and report a toast to the user instead of crashing the form.
+- If `ANTHROPIC_API_KEY` is missing the action returns a typed `AiNotConfiguredError` with a clear "set ANTHROPIC_API_KEY" message instead of failing silently.
+
+### D-017 CSV import behavior
+- Lookup maps (sites, categories, users) are fetched once per import, then resolved by lowercased name (or email for assignees). Unknown references just drop the field — the row still imports.
+- Each invalid row produces a `{ row, tag?, reason }` entry so the UI can show actionable errors. The whole import runs inside a single Prisma `$transaction`, but each row's failure does not abort the others — we collect errors and continue. The audit log entries for successful rows are inserted via a single `createMany` at the end of the tx.
+- Max upload is 5 MB. Full row-level UI validator + dry-run preview is deferred to M11.
+
 ## 2026-05-15 — Foundation kickoff
 
 ### D-001 Project name

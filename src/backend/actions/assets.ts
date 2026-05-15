@@ -11,12 +11,22 @@ import { exportAssetsXlsx } from "@/backend/services/excel-export";
 import { listAssets } from "@/backend/services/assets";
 import {
   createAssetSchema,
+  csvImportRowSchema,
+  CSV_TEMPLATE_HEADERS,
   updateAssetSchema,
   type CreateAssetInput,
   type UpdateAssetInput,
   type AssetFiltersInput,
 } from "@/shared/schemas/asset";
+import { parseCsv } from "@/backend/services/csv";
 import type { ActionResult } from "@/shared/types";
+
+export type CsvImportSummary = {
+  total: number;
+  imported: number;
+  failed: number;
+  errors: Array<{ row: number; tag?: string; reason: string }>;
+};
 
 async function generateNextTag(workspaceId: string, tx: Prisma.TransactionClient): Promise<string> {
   const latest = await tx.asset.findMany({
@@ -228,4 +238,167 @@ export async function exportAssetsAction(filters: AssetFiltersInput): Promise<st
 
 export async function redirectToNewAsset() {
   redirect("/assets/new");
+}
+
+export async function bulkImportCsvAction(formData: FormData): Promise<ActionResult<CsvImportSummary>> {
+  const session = await requireSession();
+  requirePermission(session.role, "asset.import");
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Pick a CSV file to import." };
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    return { ok: false, error: "CSV must be under 5 MB." };
+  }
+
+  const text = await file.text();
+  const { headers, rows } = parseCsv(text);
+  if (rows.length === 0) {
+    return { ok: false, error: "CSV has no data rows." };
+  }
+  const requiredHeader = "name";
+  if (!headers.includes(requiredHeader)) {
+    return {
+      ok: false,
+      error: `CSV header must include "name". Got: ${headers.join(", ")}`,
+    };
+  }
+
+  // Pre-fetch lookup maps once
+  const [sites, categories, users] = await Promise.all([
+    prisma.site.findMany({
+      where: { workspaceId: session.workspaceId },
+      select: { id: true, name: true, locations: { select: { id: true, name: true } } },
+    }),
+    prisma.category.findMany({
+      where: { workspaceId: session.workspaceId },
+      select: { id: true, name: true },
+    }),
+    prisma.user.findMany({
+      where: { workspaceId: session.workspaceId, deletedAt: null },
+      select: { id: true, email: true },
+    }),
+  ]);
+  const siteByName = new Map(sites.map((s) => [s.name.toLowerCase(), s]));
+  const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
+  const userByEmail = new Map(users.map((u) => [u.email.toLowerCase(), u]));
+
+  const errors: CsvImportSummary["errors"] = [];
+  let imported = 0;
+  const created: Array<{ id: string; tag: string; name: string }> = [];
+
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < rows.length; i++) {
+      const raw = rows[i]!;
+      const lineNo = i + 2; // header is row 1
+
+      const parsed = csvImportRowSchema.safeParse({
+        ...raw,
+        purchasePrice: raw.purchasePrice ? Number(raw.purchasePrice) : undefined,
+        memoryGB: raw.memoryGB ? Number(raw.memoryGB) : undefined,
+        storageGB: raw.storageGB ? Number(raw.storageGB) : undefined,
+        displayInches: raw.displayInches ? Number(raw.displayInches) : undefined,
+      });
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        errors.push({
+          row: lineNo,
+          tag: raw.tag || undefined,
+          reason: `${issue?.path?.join(".") ?? "field"}: ${issue?.message ?? "invalid"}`,
+        });
+        continue;
+      }
+
+      const row = parsed.data;
+      const site = row.site ? siteByName.get(row.site.toLowerCase()) : undefined;
+      const location =
+        site && row.location
+          ? site.locations.find((l) => l.name.toLowerCase() === row.location!.toLowerCase())
+          : undefined;
+      const category = row.category
+        ? categoryByName.get(row.category.toLowerCase())
+        : undefined;
+      const assignee = row.assigneeEmail
+        ? userByEmail.get(row.assigneeEmail.toLowerCase())
+        : undefined;
+
+      const tag = row.tag?.trim() || (await generateNextTag(session.workspaceId, tx));
+      const conflict = await tx.asset.findFirst({
+        where: { workspaceId: session.workspaceId, tag, deletedAt: null },
+        select: { id: true },
+      });
+      if (conflict) {
+        errors.push({ row: lineNo, tag, reason: `tag ${tag} already exists` });
+        continue;
+      }
+
+      const purchaseDate = row.purchaseDate ? new Date(row.purchaseDate) : undefined;
+      const warrantyEndsAt = row.warrantyEndsAt ? new Date(row.warrantyEndsAt) : undefined;
+
+      try {
+        const asset = await tx.asset.create({
+          data: {
+            workspaceId: session.workspaceId,
+            tag,
+            name: row.name,
+            status: row.status ?? "AVAILABLE",
+            currency: row.currency ?? "USD",
+            ...clean({
+              brand: row.brand,
+              model: row.model,
+              serialNumber: row.serialNumber,
+              categoryId: category?.id,
+              siteId: site?.id,
+              locationId: location?.id,
+              assigneeId: assignee?.id,
+              purchaseDate,
+              purchasePrice: row.purchasePrice,
+              warrantyEndsAt,
+              cpu: row.cpu,
+              memoryGB: row.memoryGB,
+              storageGB: row.storageGB,
+              displayInches: row.displayInches,
+              os: row.os,
+              notes: row.notes,
+            }),
+          },
+          select: { id: true, tag: true, name: true },
+        });
+        created.push(asset);
+        imported += 1;
+      } catch (err) {
+        errors.push({
+          row: lineNo,
+          tag,
+          reason: err instanceof Error ? err.message : "insert failed",
+        });
+      }
+    }
+
+    if (created.length > 0) {
+      await tx.auditLog.createMany({
+        data: created.map((a) => ({
+          workspaceId: session.workspaceId,
+          actorId: session.userId,
+          action: "asset.imported",
+          resourceType: "asset",
+          resourceId: a.id,
+          payload: { tag: a.tag, name: a.name, source: "csv" },
+        })),
+      });
+    }
+  });
+
+  revalidatePath("/assets");
+  revalidatePath("/dashboard");
+
+  return {
+    ok: true,
+    data: { total: rows.length, imported, failed: errors.length, errors },
+  };
+}
+
+export async function getCsvTemplate(): Promise<string> {
+  return CSV_TEMPLATE_HEADERS.join(",") + "\n";
 }

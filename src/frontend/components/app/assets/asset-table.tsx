@@ -8,7 +8,6 @@ import {
   useReactTable,
   type ColumnDef,
   type RowSelectionState,
-  type SortingState,
 } from "@tanstack/react-table";
 import { motion } from "motion/react";
 import { ArrowUpDown, Columns3, Download, Loader2 } from "lucide-react";

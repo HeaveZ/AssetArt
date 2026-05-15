@@ -197,7 +197,7 @@ async function main() {
 
   // ───────── Customers ─────────
   console.info("  ✓ customers");
-  const customers = await Promise.all([
+  await Promise.all([
     prisma.customer.create({ data: { workspaceId: workspace.id, name: "Acme Logistics",  contactName: "Sarah Park", contactEmail: "sarah@acme.example" } }),
     prisma.customer.create({ data: { workspaceId: workspace.id, name: "Northwind Retail", contactName: "Mark Vega", contactEmail: "mark@nw.example" } }),
   ]);

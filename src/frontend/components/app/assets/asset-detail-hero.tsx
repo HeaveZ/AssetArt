@@ -9,7 +9,7 @@ import {
   Cpu,
   Hash,
   HardDrive,
-  Monitor,
+  type Monitor,
   Package,
   Pencil,
 } from "lucide-react";
