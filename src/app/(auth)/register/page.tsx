@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { RegisterForm } from "@/components/app/auth/register-form";
+import { RegisterForm } from "@/frontend/components/app/auth/register-form";
 
 export const metadata: Metadata = {
   title: "Create your workspace",

@@ -13,8 +13,8 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { PageHeader } from "@/components/app/page-header";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@/frontend/components/app/page-header";
+import { cn } from "@/frontend/lib/utils";
 
 export const metadata: Metadata = { title: "Settings" };
 

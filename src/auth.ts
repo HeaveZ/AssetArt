@@ -3,9 +3,9 @@ import Credentials from "next-auth/providers/credentials";
 import Resend from "next-auth/providers/resend";
 import bcrypt from "bcryptjs";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/server/db";
+import { prisma } from "@/backend/db";
 import { authConfig } from "@/auth.config";
-import { signInSchema } from "@/schemas/auth";
+import { signInSchema } from "@/shared/schemas/auth";
 
 const useResend = Boolean(process.env.RESEND_API_KEY);
 

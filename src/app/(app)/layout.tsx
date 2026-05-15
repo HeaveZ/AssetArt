@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { prisma } from "@/server/db";
-import { AppSidebar } from "@/components/app/app-sidebar";
-import { TopBar } from "@/components/app/top-bar";
-import type { ActiveSession } from "@/server/session";
+import { prisma } from "@/backend/db";
+import { AppSidebar } from "@/frontend/components/app/app-sidebar";
+import { TopBar } from "@/frontend/components/app/top-bar";
+import type { ActiveSession } from "@/backend/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();

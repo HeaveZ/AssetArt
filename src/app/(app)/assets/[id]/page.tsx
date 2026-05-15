@@ -11,22 +11,22 @@ import {
   Wrench,
 } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/components/app/page-header";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AssetDetailHero } from "@/components/app/assets/asset-detail-hero";
-import { EmptyState } from "@/components/app/empty-state";
-import { UserAvatar } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { AssetStatusBadge } from "@/components/app/status-badge";
+import { PageHeader } from "@/frontend/components/app/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/frontend/components/ui/tabs";
+import { AssetDetailHero } from "@/frontend/components/app/assets/asset-detail-hero";
+import { EmptyState } from "@/frontend/components/app/empty-state";
+import { UserAvatar } from "@/frontend/components/ui/avatar";
+import { Badge } from "@/frontend/components/ui/badge";
+import { AssetStatusBadge } from "@/frontend/components/app/status-badge";
 import {
   ASSET_STATUS_META,
   LEASE_STATUS_META,
   MAINTENANCE_STATUS_META,
   MAINTENANCE_TYPE_META,
-} from "@/lib/constants";
-import { getAssetDetail } from "@/server/services/assets";
-import { formatDate, formatDateTime, formatMoney, timeAgo } from "@/lib/format";
-import { cn } from "@/lib/utils";
+} from "@/shared/constants";
+import { getAssetDetail } from "@/backend/services/assets";
+import { formatDate, formatDateTime, formatMoney, timeAgo } from "@/shared/format";
+import { cn } from "@/frontend/lib/utils";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;

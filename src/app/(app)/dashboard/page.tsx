@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight, Plus } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/components/app/page-header";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { KpiCards } from "@/components/app/dashboard/kpi-cards";
-import { RecentAssetsCard } from "@/components/app/dashboard/recent-assets";
-import { ActivityFeedCard } from "@/components/app/dashboard/activity-feed";
-import { AlertsWidget } from "@/components/app/dashboard/alerts-widget";
-import { CategoryChart, StatusChart } from "@/components/app/dashboard/charts";
-import { getDashboardSummary } from "@/server/services/dashboard";
+import { PageHeader } from "@/frontend/components/app/page-header";
+import { Button } from "@/frontend/components/ui/button";
+import { Badge } from "@/frontend/components/ui/badge";
+import { KpiCards } from "@/frontend/components/app/dashboard/kpi-cards";
+import { RecentAssetsCard } from "@/frontend/components/app/dashboard/recent-assets";
+import { ActivityFeedCard } from "@/frontend/components/app/dashboard/activity-feed";
+import { AlertsWidget } from "@/frontend/components/app/dashboard/alerts-widget";
+import { CategoryChart, StatusChart } from "@/frontend/components/app/dashboard/charts";
+import { getDashboardSummary } from "@/backend/services/dashboard";
 
 export const metadata: Metadata = { title: "Dashboard" };
 

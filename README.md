@@ -20,7 +20,7 @@
 | Charts           | Recharts                                                      |
 | Premium add-ons  | AI auto-categorization · QR labels + scan · Floor map editor  |
 
-Brand tokens live in `src/app/globals.css` (light + dark). Component primitives are in `src/components/ui/`, app-level composites in `src/components/app/`, server actions in `src/server/actions/`, services in `src/server/services/`.
+Brand tokens live in `src/app/globals.css` (light + dark). The codebase is split into three layers — `src/frontend/`, `src/backend/`, and `src/shared/` — with strict one-way dependencies. See [`docs/architecture.md`](./docs/architecture.md) for the full layout and the rules for adding a new domain.
 
 ---
 
@@ -82,15 +82,25 @@ nano .env.production
 
 ### Putting it behind HTTPS
 
-Two options:
+Pick one:
 
-**A. Built-in Caddy** — edit `deploy/Caddyfile` with your hostname, then:
+**A. Host-level nginx + Let's Encrypt** (recommended for Contabo VPS)
 
 ```bash
+# As root on the server, after the app is running on :3000
+sudo ./deploy/nginx/setup.sh assets.evam.com ops@evam.com
+```
+
+The script installs `nginx` + `certbot`, drops in `deploy/nginx/nginx.conf` (rate limiting, HSTS, gzip, websocket upgrade, long cache for `_next/static`), gets a Let's Encrypt certificate via the http-01 challenge, and reloads. Renewal is automatic via `certbot.timer`.
+
+**B. Built-in Caddy (in-compose)** — zero config, automatic SSL but adds an extra container:
+
+```bash
+# Edit deploy/Caddyfile and replace assets.yourdomain.com
 docker compose -f docker-compose.prod.yml --profile caddy up -d
 ```
 
-**B. Your own reverse proxy** — point Nginx/Traefik/Cloudflare Tunnel at `127.0.0.1:3000` (or whatever `APP_PORT` you set in `.env.production`).
+**C. Your own proxy** — point Traefik / Cloudflare Tunnel / existing nginx at `127.0.0.1:3000`.
 
 ### Health & logs
 

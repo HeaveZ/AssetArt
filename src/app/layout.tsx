@@ -1,8 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { ThemeProvider } from "@/components/theme-provider";
-import { NuqsProvider } from "@/components/nuqs-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/frontend/providers/theme-provider";
+import { NuqsProvider } from "@/frontend/providers/nuqs-provider";
+import { Toaster } from "@/frontend/components/ui/sonner";
 import "./globals.css";
 
 const inter = Inter({
