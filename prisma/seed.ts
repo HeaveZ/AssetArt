@@ -6,23 +6,36 @@ import { PrismaPg } from "@prisma/adapter-pg";
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for seeding");
 
+if (process.env.NODE_ENV === "production") {
+  throw new Error(
+    "Refusing to seed against NODE_ENV=production. Run with NODE_ENV=development or staging.",
+  );
+}
+
+function requireSeedPassword(): string {
+  const value = process.env.SEED_DEFAULT_PASSWORD;
+  if (!value || value.length < 8) {
+    throw new Error(
+      "SEED_DEFAULT_PASSWORD is required (min 8 chars). Set it in .env.local before running `pnpm db:seed`.",
+    );
+  }
+  return value;
+}
+
+const SEED_PASSWORD = requireSeedPassword();
+
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
-const SEED_USERS: Array<{
-  email: string;
-  name: string;
-  role: Role;
-  password: string;
-}> = [
-  { email: "ibrahim@evam.com",   name: "Ibrahim Bekar",   role: "OWNER",   password: "Evam!2026" },
-  { email: "elif@evam.com",      name: "Elif Demir",       role: "ADMIN",   password: "Evam!2026" },
-  { email: "kerem@evam.com",     name: "Kerem Aksoy",      role: "ADMIN",   password: "Evam!2026" },
-  { email: "deniz@evam.com",     name: "Deniz Yıldız",     role: "MANAGER", password: "Evam!2026" },
-  { email: "selin@evam.com",     name: "Selin Kaya",       role: "MANAGER", password: "Evam!2026" },
-  { email: "burak@evam.com",     name: "Burak Şahin",      role: "MEMBER",  password: "Evam!2026" },
-  { email: "ayse@evam.com",      name: "Ayşe Çelik",       role: "MEMBER",  password: "Evam!2026" },
-  { email: "mehmet@evam.com",    name: "Mehmet Arslan",    role: "VIEWER",  password: "Evam!2026" },
+const SEED_USERS: Array<{ email: string; name: string; role: Role }> = [
+  { email: "ibrahim@evam.com", name: "Ibrahim Bekar",  role: "OWNER"   },
+  { email: "elif@evam.com",    name: "Elif Demir",     role: "ADMIN"   },
+  { email: "kerem@evam.com",   name: "Kerem Aksoy",    role: "ADMIN"   },
+  { email: "deniz@evam.com",   name: "Deniz Yıldız",   role: "MANAGER" },
+  { email: "selin@evam.com",   name: "Selin Kaya",     role: "MANAGER" },
+  { email: "burak@evam.com",   name: "Burak Şahin",    role: "MEMBER"  },
+  { email: "ayse@evam.com",    name: "Ayşe Çelik",     role: "MEMBER"  },
+  { email: "mehmet@evam.com",  name: "Mehmet Arslan",  role: "VIEWER"  },
 ];
 
 const SITE_DATA = [
@@ -126,13 +139,14 @@ async function main() {
 
   // ───────── Users ─────────
   console.info("  ✓ users");
+  const seedPasswordHash = await bcrypt.hash(SEED_PASSWORD, 12);
   const users = await Promise.all(
     SEED_USERS.map(async (u) =>
       prisma.user.create({
         data: {
           email: u.email,
           name: u.name,
-          passwordHash: await bcrypt.hash(u.password, 12),
+          passwordHash: seedPasswordHash,
           role: u.role,
           workspaceId: workspace.id,
           emailVerified: new Date(),
@@ -412,7 +426,7 @@ async function main() {
   await prisma.auditLog.createMany({ data: auditPayload });
 
   console.info(`\n✅ Seed complete · Workspace "${workspace.name}" · ${users.length} users · ${assets.length} assets`);
-  console.info("Login: ibrahim@evam.com / Evam!2026\n");
+  console.info("Login: ibrahim@evam.com (password from SEED_DEFAULT_PASSWORD in your .env)\n");
 }
 
 main()

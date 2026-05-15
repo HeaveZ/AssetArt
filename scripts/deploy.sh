@@ -31,28 +31,28 @@ git pull --ff-only origin main
 
 if [[ "$BUILD" == "true" ]]; then
   echo "→ Building production image"
-  docker compose -f docker-compose.prod.yml build app
+  docker compose -f deploy/docker-compose.prod.yml build app
 fi
 
 echo "→ Starting database"
-docker compose -f docker-compose.prod.yml up -d postgres
+docker compose -f deploy/docker-compose.prod.yml up -d postgres
 
 echo "→ Waiting for postgres to be healthy"
 for i in $(seq 1 30); do
-  if docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER:-evam}" >/dev/null 2>&1; then
+  if docker compose -f deploy/docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER:-evam}" >/dev/null 2>&1; then
     break
   fi
   sleep 1
 done
 
 echo "→ Starting application (entrypoint runs migrate deploy)"
-docker compose -f docker-compose.prod.yml up -d app
+docker compose -f deploy/docker-compose.prod.yml up -d app
 
 if [[ "$SEED" == "true" ]]; then
   echo "→ Seeding demo data"
-  docker compose -f docker-compose.prod.yml exec -T app sh -c "node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts"
+  docker compose -f deploy/docker-compose.prod.yml exec -T app sh -c "node ./node_modules/tsx/dist/cli.mjs prisma/seed.ts"
 fi
 
 echo
 echo "✓ Deploy complete."
-docker compose -f docker-compose.prod.yml ps
+docker compose -f deploy/docker-compose.prod.yml ps

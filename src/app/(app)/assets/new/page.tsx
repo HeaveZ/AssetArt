@@ -3,10 +3,10 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, FileUp, Sparkles } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/frontend/components/app/page-header";
+import { PageHeader } from "@/frontend/components/common/page-header";
 import { Button } from "@/frontend/components/ui/button";
 import { Badge } from "@/frontend/components/ui/badge";
-import { AssetForm } from "@/frontend/components/app/assets/asset-form";
+import { AssetForm } from "@/frontend/components/features/assets/asset-form";
 import { getAssetFormData } from "@/backend/services/assets";
 import { can } from "@/shared/permissions";
 

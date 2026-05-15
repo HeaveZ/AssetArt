@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { KeyRound } from "lucide-react";
-import { PageHeader } from "@/frontend/components/app/page-header";
-import { EmptyState } from "@/frontend/components/app/empty-state";
+import { PageHeader } from "@/frontend/components/common/page-header";
+import { EmptyState } from "@/frontend/components/common/empty-state";
 
 export const metadata: Metadata = { title: "Licenses" };
 

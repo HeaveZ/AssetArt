@@ -11,10 +11,10 @@ import {
   Wrench,
 } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/frontend/components/app/page-header";
+import { PageHeader } from "@/frontend/components/common/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/frontend/components/ui/tabs";
-import { AssetDetailHero } from "@/frontend/components/app/assets/asset-detail-hero";
-import { EmptyState } from "@/frontend/components/app/empty-state";
+import { AssetDetailHero } from "@/frontend/components/features/assets/asset-detail-hero";
+import { EmptyState } from "@/frontend/components/common/empty-state";
 import { UserAvatar } from "@/frontend/components/ui/avatar";
 import { Badge } from "@/frontend/components/ui/badge";
 import {

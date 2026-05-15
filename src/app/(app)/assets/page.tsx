@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { FileUp, Plus } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/frontend/components/app/page-header";
+import { PageHeader } from "@/frontend/components/common/page-header";
 import { Button } from "@/frontend/components/ui/button";
 import { Badge } from "@/frontend/components/ui/badge";
-import { AssetSearch } from "@/frontend/components/app/assets/asset-search";
-import { AssetFiltersSheet } from "@/frontend/components/app/assets/asset-filters-sheet";
-import { AssetTable } from "@/frontend/components/app/assets/asset-table";
+import { AssetSearch } from "@/frontend/components/features/assets/asset-search";
+import { AssetFiltersSheet } from "@/frontend/components/features/assets/asset-filters-sheet";
+import { AssetTable } from "@/frontend/components/features/assets/asset-table";
 import { getAssetFacets, listAssets } from "@/backend/services/assets";
 import { assetFiltersSchema, type AssetFiltersInput } from "@/shared/schemas/asset";
 

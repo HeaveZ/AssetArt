@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Map as MapIcon } from "lucide-react";
-import { PageHeader } from "@/frontend/components/app/page-header";
-import { EmptyState } from "@/frontend/components/app/empty-state";
+import { PageHeader } from "@/frontend/components/common/page-header";
+import { EmptyState } from "@/frontend/components/common/empty-state";
 import { Badge } from "@/frontend/components/ui/badge";
 
 export const metadata: Metadata = { title: "Floor map" };

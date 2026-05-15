@@ -11,8 +11,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,css,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,css,json}\"",
     "typecheck": "tsc --noEmit",
-    "db:up": "docker compose up -d postgres mailhog",
-    "db:down": "docker compose down",
+    "db:up": "docker compose -f deploy/docker-compose.yml up -d postgres mailhog",
+    "db:down": "docker compose -f deploy/docker-compose.yml down",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
@@ -33,6 +33,19 @@
     "*.{json,md,css}": [
       "prettier --write"
     ]
+  },
+  "prettier": {
+    "semi": true,
+    "singleQuote": false,
+    "trailingComma": "all",
+    "printWidth": 100,
+    "tabWidth": 2,
+    "arrowParens": "always",
+    "plugins": ["prettier-plugin-tailwindcss"],
+    "tailwindFunctions": ["cn", "clsx", "cva"]
+  },
+  "commitlint": {
+    "extends": ["@commitlint/config-conventional"]
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",

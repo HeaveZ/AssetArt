@@ -45,11 +45,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open `http://localhost:3000` and sign in with:
-
-```
-ibrahim@evam.com / Evam!2026
-```
+Open `http://localhost:3000` and sign in as `ibrahim@evam.com`. The password is whatever you set as `SEED_DEFAULT_PASSWORD` in `.env.local` before running `pnpm db:seed` — it's never committed to the repo.
 
 MailHog UI: `http://localhost:8025` (catches Magic Link emails locally).
 
@@ -57,7 +53,7 @@ MailHog UI: `http://localhost:8025` (catches Magic Link emails locally).
 
 ## Production deploy (Contabo VPS with Docker)
 
-The image is a self-contained Next.js 16 standalone server that runs Prisma migrations on startup. The `docker-compose.prod.yml` brings up Postgres + the app, with an optional Caddy profile for automatic Let's Encrypt SSL.
+The image is a self-contained Next.js 16 standalone server that runs Prisma migrations on startup. The `deploy/docker-compose.prod.yml` brings up Postgres + the app, with an optional Caddy profile for automatic Let's Encrypt SSL.
 
 ### One-time setup on the server
 
@@ -97,7 +93,7 @@ The script installs `nginx` + `certbot`, drops in `deploy/nginx/nginx.conf` (rat
 
 ```bash
 # Edit deploy/Caddyfile and replace assets.yourdomain.com
-docker compose -f docker-compose.prod.yml --profile caddy up -d
+docker compose -f deploy/docker-compose.prod.yml --profile caddy up -d
 ```
 
 **C. Your own proxy** — point Traefik / Cloudflare Tunnel / existing nginx at `127.0.0.1:3000`.
@@ -105,8 +101,8 @@ docker compose -f docker-compose.prod.yml --profile caddy up -d
 ### Health & logs
 
 ```bash
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f app
+docker compose -f deploy/docker-compose.prod.yml ps
+docker compose -f deploy/docker-compose.prod.yml logs -f app
 curl http://localhost:3000/api/health
 ```
 
