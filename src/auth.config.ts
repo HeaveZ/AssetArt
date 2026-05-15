@@ -23,6 +23,7 @@ export const authConfig = {
 
       const isPublic =
         pathname === "/" ||
+        pathname === "/api/health" ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/_next") ||
         pathname.startsWith("/static");

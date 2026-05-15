@@ -1,16 +1,18 @@
-# Replace `assets.yourdomain.com` with your actual hostname before enabling the
-# `caddy` profile in docker-compose.prod.yml. Caddy will provision a Let's Encrypt
-# certificate automatically.
+# Caddyfile — assetnova TLS reverse proxy.
+# Domain `.env.production`'daki CADDY_DOMAIN'den gelir.
+# Aktivasyon: docker compose --profile tls up -d caddy
 
-assets.yourdomain.com {
+{$CADDY_DOMAIN} {
   encode zstd gzip
-  reverse_proxy app:3000 {
+  reverse_proxy web:3000 {
     header_up X-Real-IP {remote_host}
     header_up X-Forwarded-Proto {scheme}
+    header_up X-Forwarded-For {remote_host}
   }
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "strict-origin-when-cross-origin"
+    -Server
   }
 }
