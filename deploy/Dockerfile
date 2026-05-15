@@ -85,18 +85,22 @@ CMD ["node","server.js"]
 FROM node:${NODE_VERSION} AS migrator
 WORKDIR /app
 
-RUN apk add --no-cache tini openssl libc6-compat
+RUN apk add --no-cache tini openssl libc6-compat \
+ && addgroup -S app && adduser -S app -G app
 
 ENV NODE_ENV=production
 
-COPY --from=builder /app/prisma                              ./prisma
-COPY --from=builder /app/prisma.config.ts                    ./prisma.config.ts
-COPY --from=builder /app/package.json                        ./package.json
+COPY --from=builder --chown=app:app /app/prisma              ./prisma
+COPY --from=builder --chown=app:app /app/prisma.config.ts    ./prisma.config.ts
+COPY --from=builder --chown=app:app /app/package.json        ./package.json
 # Tam node_modules: prisma CLI'ın transitive deps'leri (effect, fast-check, vb.)
-COPY --from=builder /app/node_modules                        ./node_modules
+COPY --from=builder --chown=app:app /app/node_modules        ./node_modules
 
 RUN printf '#!/bin/sh\nset -e\necho "[migrator] running prisma migrate deploy"\nnode ./node_modules/prisma/build/index.js migrate deploy\necho "[migrator] done"\n' > /entrypoint.sh \
- && chmod +x /entrypoint.sh
+ && chmod +x /entrypoint.sh \
+ && chown app:app /entrypoint.sh
+
+USER app
 
 ENTRYPOINT ["/sbin/tini","--"]
 CMD ["/entrypoint.sh"]
