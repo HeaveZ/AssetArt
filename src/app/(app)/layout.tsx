@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/backend/db";
-import { AppSidebar } from "@/frontend/components/app/app-sidebar";
-import { TopBar } from "@/frontend/components/app/top-bar";
+import { AppSidebar } from "@/frontend/components/layout/app-sidebar";
+import { TopBar } from "@/frontend/components/layout/top-bar";
+import { getUnreadAlertCount } from "@/backend/services/alerts";
 import type { ActiveSession } from "@/backend/session";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -19,12 +20,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   };
 
   let workspace = { name: "Evam Tech", siteCount: 0 };
+  let unreadAlerts = 0;
   try {
-    const ws = await prisma.workspace.findUnique({
-      where: { id: activeSession.workspaceId },
-      select: { name: true, _count: { select: { sites: true } } },
-    });
+    const [ws, alerts] = await Promise.all([
+      prisma.workspace.findUnique({
+        where: { id: activeSession.workspaceId },
+        select: { name: true, _count: { select: { sites: true } } },
+      }),
+      getUnreadAlertCount(activeSession.workspaceId),
+    ]);
     if (ws) workspace = { name: ws.name, siteCount: ws._count.sites };
+    unreadAlerts = alerts;
   } catch {
     // DB may be unavailable in dev — fall back to placeholder
   }
@@ -33,7 +39,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-surface-muted">
       <AppSidebar workspace={workspace} session={activeSession} />
       <div className="lg:pl-[var(--sidebar-width)]">
-        <TopBar />
+        <TopBar unreadAlerts={unreadAlerts} />
         <main className="px-4 py-5 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>

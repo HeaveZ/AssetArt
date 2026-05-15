@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LoginForm } from "@/frontend/components/app/auth/login-form";
+import { LoginForm } from "@/frontend/components/features/auth/login-form";
 
 export const metadata: Metadata = {
   title: "Sign in",

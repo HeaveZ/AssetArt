@@ -3,9 +3,9 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Plus } from "lucide-react";
 import { auth } from "@/auth";
-import { PageHeader } from "@/frontend/components/app/page-header";
+import { PageHeader } from "@/frontend/components/common/page-header";
 import { Button } from "@/frontend/components/ui/button";
-import { AssetCsvImport } from "@/frontend/components/app/assets/asset-csv-import";
+import { AssetCsvImport } from "@/frontend/components/features/assets/asset-csv-import";
 import { can } from "@/shared/permissions";
 
 export const metadata: Metadata = { title: "Bulk import" };

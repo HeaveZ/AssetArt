@@ -6,8 +6,8 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/backend/db";
 import { requireSession } from "@/backend/session";
 import { requirePermission } from "@/shared/permissions";
-import { writeAudit } from "@/backend/services/audit";
-import { exportAssetsXlsx } from "@/backend/services/excel-export";
+import { writeAudit } from "@/backend/lib/audit";
+import { exportAssetsXlsx } from "@/backend/lib/excel-export";
 import { listAssets } from "@/backend/services/assets";
 import {
   createAssetSchema,
@@ -18,7 +18,7 @@ import {
   type UpdateAssetInput,
   type AssetFiltersInput,
 } from "@/shared/schemas/asset";
-import { parseCsv } from "@/backend/services/csv";
+import { parseCsv } from "@/backend/lib/csv";
 import type { ActionResult } from "@/shared/types";
 
 export type CsvImportSummary = {
