@@ -11,6 +11,7 @@ import { ActivityFeedCard } from "@/frontend/components/features/dashboard/activ
 import { AlertsWidget } from "@/frontend/components/features/dashboard/alerts-widget";
 import { CategoryChart } from "@/frontend/components/features/dashboard/category-chart";
 import { StatusChart } from "@/frontend/components/features/dashboard/status-chart";
+import { WeeklyDiffWidget } from "@/frontend/components/features/dashboard/weekly-diff-widget";
 import { getDashboardSummary } from "@/backend/services/dashboard";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -54,13 +55,16 @@ export default async function DashboardPage() {
         }
       />
 
-      <KpiCards totals={summary.totals} />
+      <KpiCards totals={summary.totals} trends={summary.trends} weekDiff={summary.weekDiff} />
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <div className="xl:col-span-2">
           <RecentAssetsCard assets={summary.recentAssets} />
         </div>
-        <AlertsWidget alerts={summary.alerts} />
+        <div className="space-y-3">
+          <WeeklyDiffWidget weekDiff={summary.weekDiff} trends={summary.trends} />
+          <AlertsWidget alerts={summary.alerts} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">

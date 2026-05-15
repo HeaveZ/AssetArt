@@ -47,6 +47,16 @@ export type DashboardSummary = {
     resourceId: string | null;
     createdAt: Date;
   }>;
+  trends: {
+    assetsCreated: number[];
+    checkouts: number[];
+    maintenance: number[];
+  };
+  weekDiff: {
+    newAssets: { current: number; previous: number };
+    checkouts: { current: number; previous: number };
+    completedMaintenance: { current: number; previous: number };
+  };
 };
 
 const EMPTY: DashboardSummary = {
@@ -63,7 +73,16 @@ const EMPTY: DashboardSummary = {
   recentAssets: [],
   activity: [],
   alerts: [],
+  trends: { assetsCreated: [], checkouts: [], maintenance: [] },
+  weekDiff: {
+    newAssets: { current: 0, previous: 0 },
+    checkouts: { current: 0, previous: 0 },
+    completedMaintenance: { current: 0, previous: 0 },
+  },
 };
+
+const TREND_WEEKS = 8;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export async function getDashboardSummary(workspaceId: string): Promise<DashboardSummary> {
   try {
@@ -132,6 +151,49 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       .map((g) => ({ name: g.categoryId ? catNameById.get(g.categoryId) ?? "Uncategorized" : "Uncategorized", count: g._count._all }))
       .sort((a, b) => b.count - a.count);
 
+    const now = Date.now();
+    const trendStart = new Date(now - TREND_WEEKS * WEEK_MS);
+    const [trendAssets, trendCheckouts, trendMaintenance] = await Promise.all([
+      prisma.asset.findMany({
+        where: { workspaceId, deletedAt: null, createdAt: { gte: trendStart } },
+        select: { createdAt: true },
+      }),
+      prisma.checkout.findMany({
+        where: { asset: { workspaceId, deletedAt: null }, checkedOutAt: { gte: trendStart } },
+        select: { checkedOutAt: true },
+      }),
+      prisma.maintenanceRecord.findMany({
+        where: { asset: { workspaceId, deletedAt: null }, createdAt: { gte: trendStart } },
+        select: { createdAt: true, status: true, completedAt: true },
+      }),
+    ]);
+
+    const trends = {
+      assetsCreated: bucketByWeek(trendAssets.map((a) => a.createdAt), now),
+      checkouts: bucketByWeek(trendCheckouts.map((c) => c.checkedOutAt), now),
+      maintenance: bucketByWeek(trendMaintenance.map((m) => m.createdAt), now),
+    };
+
+    const weekStart = now - WEEK_MS;
+    const prevWeekStart = now - 2 * WEEK_MS;
+    const weekDiff = {
+      newAssets: countWindow(trendAssets.map((a) => a.createdAt), weekStart, prevWeekStart, now),
+      checkouts: countWindow(
+        trendCheckouts.map((c) => c.checkedOutAt),
+        weekStart,
+        prevWeekStart,
+        now,
+      ),
+      completedMaintenance: countWindow(
+        trendMaintenance
+          .filter((m) => m.status === "COMPLETED" && m.completedAt)
+          .map((m) => m.completedAt as Date),
+        weekStart,
+        prevWeekStart,
+        now,
+      ),
+    };
+
     return {
       totals: {
         totalAssets,
@@ -143,6 +205,8 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
       },
       statusMix: statusMix.map((s) => ({ status: s.status, count: s._count._all })),
       categoryMix,
+      trends,
+      weekDiff,
       recentAssets: recentAssets.map((a) => ({
         id: a.id,
         tag: a.tag,
@@ -173,4 +237,29 @@ export async function getDashboardSummary(workspaceId: string): Promise<Dashboar
     console.error("dashboard summary failed:", err);
     return EMPTY;
   }
+}
+
+function bucketByWeek(dates: Date[], now: number): number[] {
+  const buckets = new Array<number>(TREND_WEEKS).fill(0);
+  for (const d of dates) {
+    const idx = TREND_WEEKS - 1 - Math.floor((now - d.getTime()) / WEEK_MS);
+    if (idx >= 0 && idx < TREND_WEEKS) buckets[idx] = (buckets[idx] ?? 0) + 1;
+  }
+  return buckets;
+}
+
+function countWindow(
+  dates: Date[],
+  weekStart: number,
+  prevWeekStart: number,
+  now: number,
+): { current: number; previous: number } {
+  let current = 0;
+  let previous = 0;
+  for (const d of dates) {
+    const t = d.getTime();
+    if (t >= weekStart && t <= now) current += 1;
+    else if (t >= prevWeekStart && t < weekStart) previous += 1;
+  }
+  return { current, previous };
 }

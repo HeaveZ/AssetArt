@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   ArrowDownToLine,
+  ArrowRight,
   ArrowUpFromLine,
   ClipboardList,
   History,
   Image as ImageIcon,
+  LayoutGrid,
   Pencil,
   ReceiptText,
   Wrench,
@@ -14,6 +17,8 @@ import { auth } from "@/auth";
 import { PageHeader } from "@/frontend/components/common/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/frontend/components/ui/tabs";
 import { AssetDetailHero } from "@/frontend/components/features/assets/asset-detail-hero";
+import { AssetTimeline } from "@/frontend/components/features/assets/asset-timeline";
+import { AssetQrSticker } from "@/frontend/components/features/assets/asset-qr-sticker";
 import { EmptyState } from "@/frontend/components/common/empty-state";
 import { UserAvatar } from "@/frontend/components/ui/avatar";
 import { Badge } from "@/frontend/components/ui/badge";
@@ -23,7 +28,7 @@ import {
   MAINTENANCE_STATUS_META,
   MAINTENANCE_TYPE_META,
 } from "@/shared/constants";
-import { getAssetDetail } from "@/backend/services/assets";
+import { getAssetDetail, listRelatedAssets } from "@/backend/services/assets";
 import { formatDate, formatDateTime, formatMoney, timeAgo } from "@/shared/format";
 import { cn } from "@/frontend/lib/utils";
 
@@ -39,6 +44,11 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   const asset = await getAssetDetail(session.user.workspaceId, id);
   if (!asset) notFound();
+
+  const related = await listRelatedAssets(session.user.workspaceId, asset.id, {
+    categoryId: asset.categoryId,
+    siteId: asset.siteId,
+  });
 
   const heroAsset = {
     id: asset.id,
@@ -67,14 +77,30 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div className="space-y-5">
-      <PageHeader title={asset.name} description={`Detail view for ${asset.tag}`} />
+      <PageHeader
+        title={asset.name}
+        description={`Detail view for ${asset.tag}`}
+        actions={
+          <AssetQrSticker
+            asset={{
+              id: asset.id,
+              tag: asset.tag,
+              name: asset.name,
+              brand: asset.brand,
+              model: asset.model,
+              serialNumber: asset.serialNumber,
+            }}
+          />
+        }
+      />
 
       <AssetDetailHero asset={heroAsset} />
 
       <Tabs defaultValue="overview" className="w-full">
         <TabsList className="px-0">
           <TabsTrigger value="overview"><ClipboardList /> Overview</TabsTrigger>
-          <TabsTrigger value="history"><History /> History</TabsTrigger>
+          <TabsTrigger value="timeline"><History /> Timeline</TabsTrigger>
+          <TabsTrigger value="history"><ArrowUpFromLine /> Checkouts</TabsTrigger>
           <TabsTrigger value="maintenance"><Wrench /> Maintenance</TabsTrigger>
           <TabsTrigger value="lease"><ReceiptText /> Lease</TabsTrigger>
           <TabsTrigger value="photos"><ImageIcon /> Photos</TabsTrigger>
@@ -115,9 +141,95 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
               <p className="text-text whitespace-pre-wrap text-[12.5px] leading-relaxed">{asset.notes}</p>
             </DetailCard>
           ) : null}
+
+          {related.length > 0 ? (
+            <DetailCard
+              title={`Related${asset.category ? ` in ${asset.category.name}` : ""}${asset.site ? ` · ${asset.site.name}` : ""}`}
+            >
+              <div className="-mx-1 grid grid-cols-1 gap-2 pt-1 sm:grid-cols-2 xl:grid-cols-3">
+                {related.map((r) => {
+                  const meta = ASSET_STATUS_META[r.status];
+                  return (
+                    <Link
+                      key={r.id}
+                      href={`/assets/${r.id}`}
+                      className="group hover:border-brand-orange-500/40 hover:bg-surface-muted/40 flex items-center gap-2 rounded-lg border px-3 py-2 transition-colors"
+                    >
+                      <LayoutGrid className="text-text-subtle h-3.5 w-3.5" />
+                      <div className="min-w-0 flex-1">
+                        <span className="asset-tag text-[10.5px]">{r.tag}</span>
+                        <p className="text-text truncate text-[12px] font-medium">{r.name}</p>
+                        {r.brand || r.model ? (
+                          <p className="text-text-subtle truncate text-[10.5px]">
+                            {[r.brand, r.model].filter(Boolean).join(" · ")}
+                          </p>
+                        ) : null}
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                          meta.bg,
+                          meta.fg,
+                        )}
+                      >
+                        {meta.label}
+                      </span>
+                      <ArrowRight className="text-text-subtle h-3 w-3 opacity-0 transition-opacity group-hover:opacity-100" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </DetailCard>
+          ) : null}
         </TabsContent>
 
-        {/* History */}
+        {/* Unified Timeline */}
+        <TabsContent value="timeline" className="space-y-3">
+          <AssetTimeline
+            checkouts={asset.checkouts.map((co) => ({
+              id: co.id,
+              checkedOutAt: co.checkedOutAt,
+              returnedAt: co.returnedAt,
+              dueAt: co.dueAt,
+              notes: co.notes,
+              toUser: co.toUser ? { name: co.toUser.name, email: co.toUser.email } : null,
+              toPerson: co.toPerson
+                ? { firstName: co.toPerson.firstName, lastName: co.toPerson.lastName }
+                : null,
+              toSite: co.toSite ? { name: co.toSite.name } : null,
+              toCustomer: co.toCustomer ? { name: co.toCustomer.name } : null,
+            }))}
+            maintenance={asset.maintenance.map((m) => ({
+              id: m.id,
+              createdAt: m.createdAt,
+              scheduledAt: m.scheduledAt,
+              completedAt: m.completedAt,
+              status: m.status,
+              type: m.type,
+              vendor: m.vendor,
+              description: m.description,
+            }))}
+            lease={
+              asset.lease
+                ? {
+                    id: asset.lease.id,
+                    vendor: asset.lease.vendor,
+                    startDate: asset.lease.startDate,
+                    endDate: asset.lease.endDate,
+                    status: asset.lease.status,
+                  }
+                : null
+            }
+            auditLogs={asset.auditLogs.map((log) => ({
+              id: log.id,
+              createdAt: log.createdAt,
+              action: log.action,
+              actor: { name: log.actor.name, email: log.actor.email },
+            }))}
+          />
+        </TabsContent>
+
+        {/* Checkouts */}
         <TabsContent value="history" className="space-y-3">
           {asset.checkouts.length === 0 ? (
             <EmptyState
@@ -243,10 +355,20 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {asset.photos.map((p) => (
-                <div key={p.id} className="bg-surface relative aspect-video overflow-hidden rounded-lg border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={p.url} alt="" className="h-full w-full object-cover" />
-                </div>
+                <a
+                  key={p.id}
+                  href={p.url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="group bg-surface relative aspect-video overflow-hidden rounded-lg border"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external photo URLs */}
+                  <img
+                    src={p.url}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.04]"
+                  />
+                </a>
               ))}
             </div>
           )}

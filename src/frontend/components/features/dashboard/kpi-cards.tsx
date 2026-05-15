@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { ArrowDownRight, ArrowUpRight, Boxes, Diamond, Loader2, Wrench } from "lucide-react";
 import { AnimatedNumber } from "@/frontend/components/common/animated-number";
 import { Progress } from "@/frontend/components/ui/progress";
+import { Sparkline } from "@/frontend/components/common/sparkline";
 import { formatCompactMoney } from "@/shared/format";
 import { cn } from "@/frontend/lib/utils";
 
@@ -16,8 +17,32 @@ interface Totals {
   portfolioCurrency: string;
 }
 
-export function KpiCards({ totals }: { totals: Totals }) {
+interface Trends {
+  assetsCreated: number[];
+  checkouts: number[];
+  maintenance: number[];
+}
+
+interface WeekDiff {
+  newAssets: { current: number; previous: number };
+  checkouts: { current: number; previous: number };
+  completedMaintenance: { current: number; previous: number };
+}
+
+export function KpiCards({
+  totals,
+  trends,
+  weekDiff,
+}: {
+  totals: Totals;
+  trends?: Trends;
+  weekDiff?: WeekDiff;
+}) {
   const checkedOutPct = totals.totalAssets ? Math.round((totals.checkedOut / totals.totalAssets) * 100) : 0;
+
+  const newAssetsLabel = weekDiff
+    ? formatTrendLabel(weekDiff.newAssets.current, weekDiff.newAssets.previous, "this week")
+    : "+4 this week";
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -27,7 +52,16 @@ export function KpiCards({ totals }: { totals: Totals }) {
         value={totals.totalAssets}
         icon={Boxes}
         accent="navy"
-        trend={{ label: "+4 this week", positive: true }}
+        trend={
+          weekDiff
+            ? {
+                label: newAssetsLabel,
+                positive: weekDiff.newAssets.current >= weekDiff.newAssets.previous,
+              }
+            : { label: newAssetsLabel, positive: true }
+        }
+        spark={trends?.assetsCreated}
+        sparkClass="text-brand-navy-700 dark:text-brand-navy-100"
       />
       <KpiCard
         index={1}
@@ -35,6 +69,8 @@ export function KpiCards({ totals }: { totals: Totals }) {
         value={totals.checkedOut}
         icon={ArrowUpRight}
         accent="success"
+        spark={trends?.checkouts}
+        sparkClass="text-success-fg"
         meta={
           <div className="space-y-1.5 pt-2">
             <div className="flex items-center justify-between text-[10.5px]">
@@ -51,6 +87,8 @@ export function KpiCards({ totals }: { totals: Totals }) {
         value={totals.inMaintenance}
         icon={Wrench}
         accent="warning"
+        spark={trends?.maintenance}
+        sparkClass="text-warning-fg"
         trend={
           totals.overdueMaintenance > 0
             ? {
@@ -66,6 +104,12 @@ export function KpiCards({ totals }: { totals: Totals }) {
   );
 }
 
+function formatTrendLabel(current: number, previous: number, suffix: string): string {
+  const delta = current - previous;
+  const sign = delta > 0 ? "+" : delta < 0 ? "" : "±";
+  return `${sign}${delta} ${suffix}`;
+}
+
 interface KpiProps {
   index: number;
   label: string;
@@ -74,9 +118,11 @@ interface KpiProps {
   accent: "navy" | "success" | "warning" | "danger" | "info";
   trend?: { label: string; positive?: boolean; strong?: boolean };
   meta?: React.ReactNode;
+  spark?: number[];
+  sparkClass?: string;
 }
 
-function KpiCard({ index, label, value, icon: Icon, accent, trend, meta }: KpiProps) {
+function KpiCard({ index, label, value, icon: Icon, accent, trend, meta, spark, sparkClass }: KpiProps) {
   const ACCENT_CLS = {
     navy:    "bg-brand-navy-100/60 text-brand-navy-700 dark:bg-brand-navy-700/30 dark:text-brand-navy-100",
     success: "bg-success-bg text-success-fg",
@@ -100,10 +146,18 @@ function KpiCard({ index, label, value, icon: Icon, accent, trend, meta }: KpiPr
           <Icon className="h-3.5 w-3.5" strokeWidth={2} />
         </span>
       </header>
-      <div className="mt-3 flex items-baseline gap-2">
+      <div className="mt-3 flex items-end justify-between gap-2">
         <span className="text-text num text-[30px] font-medium leading-none tracking-tight">
           <AnimatedNumber value={value} />
         </span>
+        {spark && spark.length > 1 ? (
+          <Sparkline
+            values={spark}
+            strokeClassName={cn("opacity-90", sparkClass)}
+            fillClassName="opacity-60"
+            className={cn("h-7 w-20", sparkClass)}
+          />
+        ) : null}
       </div>
       {trend ? (
         <div className="mt-2 flex items-center gap-1 text-[11px]">
