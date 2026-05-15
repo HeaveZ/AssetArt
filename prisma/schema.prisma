@@ -1,0 +1,594 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Evam Assets — Prisma schema
+//  Source of truth lives in CLAUDE_CODE_PROMPT.md §6. Deviations:
+//   1. AuditLog uses polymorphic resourceType+resourceId (no direct Asset FK).
+//   2. Auth.js v5 tables (Account / Session / VerificationToken) added.
+//   3. SavedView, CustomFieldDefinition added upfront (M3 / M9 dependencies).
+//   4. License added (LICENSE_EXPIRING alert in spec implies its existence).
+//   5. FloorPlan / FloorPlanPin added for premium feature.
+//   6. CommandLog added to power Cmd+K "recent" without localStorage.
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = []
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────── Core organization ─────────
+
+model Workspace {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  logoUrl      String?
+  currency     String   @default("USD")
+  timezone     String   @default("Europe/Istanbul")
+  fiscalYearStart Int   @default(1) // month index 1-12
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users         User[]
+  sites         Site[]
+  departments   Department[]
+  people        Person[]
+  customers     Customer[]
+  categories    Category[]
+  assets        Asset[]
+  alerts        Alert[]
+  licenses      License[]
+  customFields  CustomFieldDefinition[]
+  savedViews    SavedView[]
+  floorPlans    FloorPlan[]
+  auditLogs     AuditLog[]
+  commandLogs   CommandLog[]
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email         String    @unique
+  emailVerified DateTime?
+  name          String
+  image         String?
+  passwordHash  String?
+  role          Role      @default(MEMBER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  deletedAt     DateTime?
+
+  // Auth.js adapter
+  accounts  Account[]
+  sessions  Session[]
+
+  // Relations
+  assetsAssigned Asset[]    @relation("AssetAssignee")
+  checkoutsTo    Checkout[] @relation("CheckoutToUser")
+  auditLogs      AuditLog[]
+  savedViews     SavedView[]
+  commandLogs    CommandLog[]
+
+  @@index([workspaceId])
+}
+
+// Auth.js v5 adapter tables ────────────────────────────
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ───────── Org structure ─────────
+
+model Site {
+  id          String     @id @default(cuid())
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  code        String?
+  address     String?
+  timezone    String?
+  createdAt   DateTime   @default(now())
+
+  locations   Location[]
+  assets      Asset[]
+  floorPlans  FloorPlan[]
+  checkouts   Checkout[] @relation("CheckoutToSite")
+
+  @@unique([workspaceId, name])
+}
+
+model Location {
+  id          String  @id @default(cuid())
+  siteId      String
+  site        Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+
+  assets Asset[]
+
+  @@unique([siteId, name])
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  code        String?
+
+  people Person[]
+
+  @@unique([workspaceId, name])
+}
+
+model Person {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  employeeId   String?
+  jobTitle     String?
+  avatarUrl    String?
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  checkouts Checkout[] @relation("CheckoutToPerson")
+
+  @@index([workspaceId])
+}
+
+model Customer {
+  id           String     @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  notes        String?
+
+  checkouts Checkout[] @relation("CheckoutToCustomer")
+
+  @@index([workspaceId])
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  workspaceId String
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  icon        String?    // lucide icon name
+  parentId    String?
+  parent      Category?  @relation("CatTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CatTree")
+
+  assets       Asset[]
+  customFields CustomFieldDefinition[]
+
+  @@unique([workspaceId, name])
+}
+
+// ───────── Asset ─────────
+
+enum AssetStatus {
+  AVAILABLE
+  CHECKED_OUT
+  IN_MAINTENANCE
+  RESERVED
+  LEASED
+  DISPOSED
+  LOST
+}
+
+model Asset {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tag           String
+  name          String
+  brand         String?
+  model         String?
+  serialNumber  String?     @unique
+  description   String?     @db.Text
+
+  categoryId    String?
+  category      Category?   @relation(fields: [categoryId], references: [id])
+  siteId        String?
+  site          Site?       @relation(fields: [siteId], references: [id])
+  locationId    String?
+  location      Location?   @relation(fields: [locationId], references: [id])
+  assigneeId    String?
+  assignee      User?       @relation("AssetAssignee", fields: [assigneeId], references: [id])
+
+  status        AssetStatus @default(AVAILABLE)
+
+  purchaseDate    DateTime?
+  purchasePrice   Decimal?  @db.Decimal(12, 2)
+  currency        String    @default("USD")
+  warrantyEndsAt  DateTime?
+  notes           String?   @db.Text
+
+  // Hardware specs (optional)
+  cpu           String?
+  memoryGB      Int?
+  storageGB     Int?
+  displayInches Decimal?    @db.Decimal(4, 1)
+  os            String?
+
+  // Custom fields (typed by CustomFieldDefinition)
+  customFields  Json?
+
+  // Media
+  photos      AssetPhoto[]
+
+  // History
+  checkouts        Checkout[]
+  maintenance      MaintenanceRecord[]
+  lease            Lease?
+  floorPlanPins    FloorPlanPin[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([workspaceId, tag])
+  @@index([status])
+  @@index([workspaceId, status])
+  @@index([categoryId])
+  @@index([assigneeId])
+}
+
+model AssetPhoto {
+  id        String   @id @default(cuid())
+  assetId   String
+  asset     Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  url       String
+  width     Int?
+  height    Int?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([assetId])
+}
+
+// ───────── Check out / in ─────────
+
+enum CheckoutTarget {
+  USER
+  PERSON
+  SITE
+  CUSTOMER
+}
+
+model Checkout {
+  id           String         @id @default(cuid())
+  assetId      String
+  asset        Asset          @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  toType       CheckoutTarget
+
+  toUserId     String?
+  toUser       User?     @relation("CheckoutToUser",     fields: [toUserId],     references: [id])
+  toPersonId   String?
+  toPerson     Person?   @relation("CheckoutToPerson",   fields: [toPersonId],   references: [id])
+  toSiteId     String?
+  toSite       Site?     @relation("CheckoutToSite",     fields: [toSiteId],     references: [id])
+  toCustomerId String?
+  toCustomer   Customer? @relation("CheckoutToCustomer", fields: [toCustomerId], references: [id])
+
+  checkedOutBy String
+  checkedOutAt DateTime  @default(now())
+  dueAt        DateTime?
+  returnedAt   DateTime?
+  returnedBy   String?
+  notes        String?   @db.Text
+
+  @@index([assetId])
+  @@index([dueAt])
+  @@index([returnedAt])
+}
+
+// ───────── Maintenance ─────────
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  INSPECTION
+  CALIBRATION
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  OVERDUE
+}
+
+model MaintenanceRecord {
+  id          String            @id @default(cuid())
+  assetId     String
+  asset       Asset             @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  type        MaintenanceType
+  status      MaintenanceStatus @default(SCHEDULED)
+  scheduledAt DateTime?
+  completedAt DateTime?
+  cost        Decimal?          @db.Decimal(12, 2)
+  currency    String            @default("USD")
+  vendor      String?
+  description String?           @db.Text
+  createdBy   String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([assetId])
+  @@index([status])
+  @@index([scheduledAt])
+}
+
+// ───────── Lease ─────────
+
+enum LeaseStatus {
+  ACTIVE
+  EXPIRING
+  ENDED
+  CANCELLED
+}
+
+model Lease {
+  id          String      @id @default(cuid())
+  assetId     String      @unique
+  asset       Asset       @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  vendor      String
+  contractRef String?
+  startDate   DateTime
+  endDate     DateTime
+  monthlyCost Decimal     @db.Decimal(12, 2)
+  currency    String      @default("USD")
+  autoRenew   Boolean     @default(false)
+  notes       String?     @db.Text
+  status      LeaseStatus @default(ACTIVE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([endDate])
+  @@index([status])
+}
+
+// ───────── License ─────────
+
+enum LicenseStatus {
+  ACTIVE
+  EXPIRING
+  EXPIRED
+  CANCELLED
+}
+
+model License {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  vendor      String?
+  licenseKey  String?
+  seats       Int           @default(1)
+  seatsUsed   Int           @default(0)
+  cost        Decimal?      @db.Decimal(12, 2)
+  currency    String        @default("USD")
+  startDate   DateTime?
+  endDate     DateTime?
+  status      LicenseStatus @default(ACTIVE)
+  notes       String?       @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([workspaceId, status])
+  @@index([endDate])
+}
+
+// ───────── Alerts ─────────
+
+enum AlertType {
+  WARRANTY_EXPIRING
+  LEASE_EXPIRING
+  MAINTENANCE_DUE
+  LICENSE_EXPIRING
+  ASSET_OVERDUE
+  ASSET_MISSING
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+model Alert {
+  id           String        @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  type         AlertType
+  severity     AlertSeverity @default(INFO)
+  title        String
+  message      String        @db.Text
+  resourceType String?
+  resourceId   String?
+  readAt       DateTime?
+  dismissedAt  DateTime?
+  createdAt    DateTime      @default(now())
+
+  @@index([workspaceId, readAt])
+  @@index([type, severity])
+}
+
+// ───────── Audit log (polymorphic) ─────────
+
+model AuditLog {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actorId      String
+  actor        User      @relation(fields: [actorId], references: [id])
+  action       String    // "asset.created", "asset.checked_out", ...
+  resourceType String    // "asset" | "lease" | "maintenance" | ...
+  resourceId   String
+  payload      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+
+  @@index([workspaceId, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([actorId])
+}
+
+// ───────── Saved views / Custom fields ─────────
+
+enum SavedViewResource {
+  ASSET
+  CHECKOUT
+  MAINTENANCE
+  LEASE
+  LICENSE
+  ALERT
+}
+
+model SavedView {
+  id          String            @id @default(cuid())
+  workspaceId String
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  resource    SavedViewResource
+  name        String
+  icon        String?
+  isShared    Boolean           @default(false)
+  filters     Json
+  columns     Json
+  sort        Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([workspaceId, resource])
+}
+
+enum CustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  BOOLEAN
+  URL
+}
+
+model CustomFieldDefinition {
+  id          String          @id @default(cuid())
+  workspaceId String
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  key         String
+  label       String
+  type        CustomFieldType
+  required    Boolean         @default(false)
+  options     Json?           // string[] for SELECT/MULTI_SELECT
+  helpText    String?
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+
+  @@unique([workspaceId, categoryId, key])
+}
+
+// ───────── Floor plan (premium) ─────────
+
+model FloorPlan {
+  id          String        @id @default(cuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  siteId      String
+  site        Site          @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name        String
+  imageUrl    String
+  width       Int
+  height      Int
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  pins FloorPlanPin[]
+
+  @@index([siteId])
+}
+
+model FloorPlanPin {
+  id          String    @id @default(cuid())
+  floorPlanId String
+  floorPlan   FloorPlan @relation(fields: [floorPlanId], references: [id], onDelete: Cascade)
+  assetId     String
+  asset       Asset     @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  x           Float
+  y           Float
+  createdAt   DateTime  @default(now())
+
+  @@unique([floorPlanId, assetId])
+  @@index([assetId])
+}
+
+// ───────── Command palette (Cmd+K) recents ─────────
+
+model CommandLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  command     String
+  payload     Json?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}

@@ -1,0 +1,39 @@
+# Repo metadata
+.git
+.github
+.gitignore
+.gitattributes
+
+# Local state
+node_modules
+.next
+.next/cache
+out
+build
+coverage
+playwright-report
+test-results
+blob-report
+.vitest-cache
+.tmp
+.cache
+.uploadthing
+*.tsbuildinfo
+
+# IDE / OS
+.idea
+.vscode
+.DS_Store
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Docs only
+docs
+*.md
+!README.md
+
+# Misc
+README.original.md
