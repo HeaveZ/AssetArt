@@ -90,19 +90,21 @@ RUN apk add --no-cache tini openssl libc6-compat \
 
 ENV NODE_ENV=production
 
-COPY --from=builder --chown=app:app /app/prisma              ./prisma
-COPY --from=builder --chown=app:app /app/prisma.config.ts    ./prisma.config.ts
-COPY --from=builder --chown=app:app /app/package.json        ./package.json
-# Tam node_modules: prisma CLI'ın transitive deps'leri (effect, fast-check, vb.)
-COPY --from=builder --chown=app:app /app/node_modules        ./node_modules
+# Owner = root, group = app, mode 0640 (owner rw, group r, others 0).
+# Maintainer önerdiği pattern (S6504): --chown=non_root user'a sahiplik vermek
+# yerine, root sahipliğinde tutup app kullanıcısına grup üzerinden read erişim.
+# `chmod -R g+X /app` sadece directory'lerde group execute biti ekler ki
+# app user `cd` ve `node` ile içeri girebilsin; dosyalara executable eklemez.
+COPY --from=builder --chown=root:app --chmod=0640 /app/prisma              ./prisma
+COPY --from=builder --chown=root:app --chmod=0640 /app/prisma.config.ts    ./prisma.config.ts
+COPY --from=builder --chown=root:app --chmod=0640 /app/package.json        ./package.json
+COPY --from=builder --chown=root:app --chmod=0640 /app/node_modules        ./node_modules
 
-# Migrator sadece read-only çalışır (prisma migrate deploy DB'ye yazar, FS'e
-# değil). Tüm kopyalanan ağaçtan owner+group+other write bitini kaldır.
-RUN chmod -R a-w /app
+RUN chmod -R g+X /app
 
 RUN printf '#!/bin/sh\nset -e\necho "[migrator] running prisma migrate deploy"\nnode ./node_modules/prisma/build/index.js migrate deploy\necho "[migrator] done"\n' > /entrypoint.sh \
- && chmod 0555 /entrypoint.sh \
- && chown app:app /entrypoint.sh
+ && chmod 0550 /entrypoint.sh \
+ && chown root:app /entrypoint.sh
 
 USER app
 
