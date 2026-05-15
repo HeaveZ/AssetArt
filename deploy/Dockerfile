@@ -34,18 +34,23 @@ RUN corepack enable && corepack prepare pnpm@9 --activate
 
 ENV NEXT_TELEMETRY_DISABLED=1 NODE_ENV=production
 
-# Build-time dummy env'leri — sadece builder stage'inde, runner image'larına SIZMAZ.
-# Runtime'da gerçek .env.production tarafından OVERRIDE edilir.
-ENV DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy"
-ENV AUTH_SECRET="build-time-dummy-not-used-at-runtime"
-ENV AUTH_URL="http://localhost"
-ENV NEXT_PUBLIC_APP_URL="http://localhost"
-
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN pnpm prisma generate
-RUN pnpm build
+# Build-time credential'lar — image'a SIZMAZ. İki yol:
+#  1) CI/Jenkins: BuildKit secret mount ile dosyadan oku (production yolu).
+#     `docker build --secret id=db_url,src=$DB_URL_FILE --secret id=auth_secret,src=$AUTH_FILE …`
+#  2) Lokal build: dosya yoksa password-FREE fallback kullan (placeholder, hassas değil).
+#     - DATABASE_URL connection string: parser için yeterli, gerçek DB yok.
+#     - AUTH_SECRET: random /dev/urandom, hardcoded değer yok.
+# Runtime'da `.env.production` (gitignore'lu) → ileride GitHub Secret ile override edilir.
+RUN --mount=type=secret,id=db_url \
+    --mount=type=secret,id=auth_secret \
+    DATABASE_URL="$(cat /run/secrets/db_url 2>/dev/null || echo 'postgresql://build@localhost:5432/build')" \
+    AUTH_SECRET="$(cat /run/secrets/auth_secret 2>/dev/null || head -c 32 /dev/urandom | base64)" \
+    AUTH_URL="http://localhost" \
+    NEXT_PUBLIC_APP_URL="http://localhost" \
+    sh -c 'pnpm prisma generate && pnpm build'
 
 # ───────── web (final target #1) ─────────
 FROM node:${NODE_VERSION} AS web
