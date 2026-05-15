@@ -4,7 +4,7 @@ import type { AssetListRow } from "@/backend/services/assets";
 
 export async function exportAssetsXlsx(rows: AssetListRow[], workspaceName: string): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Evam Assets";
+  workbook.creator = "AssetArt";
   workbook.created = new Date();
 
   const ws = workbook.addWorksheet("Assets");

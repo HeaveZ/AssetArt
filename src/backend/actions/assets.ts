@@ -232,7 +232,7 @@ export async function exportAssetsAction(filters: AssetFiltersInput): Promise<st
     select: { name: true },
   });
 
-  const buffer = await exportAssetsXlsx(rows, workspace?.name ?? "Evam");
+  const buffer = await exportAssetsXlsx(rows, workspace?.name ?? "AssetArt");
   return buffer.toString("base64");
 }
 

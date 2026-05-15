@@ -39,7 +39,7 @@ export function AssetCsvImport() {
       "Mac",
       "HQ Istanbul",
       "Floor 12 — Engineering",
-      "elif@evam.com",
+      "elif@assetart.com",
       "AVAILABLE",
       "2024-08-01",
       "3199",
@@ -56,7 +56,7 @@ export function AssetCsvImport() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "assetnova-import-template.csv";
+    a.download = "assetart-import-template.csv";
     a.click();
     URL.revokeObjectURL(url);
   }

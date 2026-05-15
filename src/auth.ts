@@ -66,7 +66,7 @@ export const {
     ...(useResend
       ? [
           Resend({
-            from: process.env.EMAIL_FROM ?? "no-reply@evam.local",
+            from: process.env.EMAIL_FROM ?? "no-reply@assetart.local",
             apiKey: process.env.RESEND_API_KEY,
           }),
         ]

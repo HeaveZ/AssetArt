@@ -15,7 +15,7 @@ export function RegisterForm() {
 
   useEffect(() => {
     if (state?.ok) {
-      toast.success("Workspace created", { description: "Welcome to Evam Assets." });
+      toast.success("Workspace created", { description: "Welcome to AssetArt." });
       router.push(state.data.redirectTo);
       router.refresh();
     } else if (state && !state.ok) {

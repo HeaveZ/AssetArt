@@ -1,6 +1,6 @@
 # Architecture
 
-AssetNova is a single Next.js 16 application with strict internal boundaries between **frontend**, **backend**, and **shared** code. Each top-level folder under `src/` has one purpose, and dependencies only point inward (frontend → shared, backend → shared, but never frontend → backend internals).
+AssetArt is a single Next.js 16 application with strict internal boundaries between **frontend**, **backend**, and **shared** code. Each top-level folder under `src/` has one purpose, and dependencies only point inward (frontend → shared, backend → shared, but never frontend → backend internals).
 
 ```
 src/

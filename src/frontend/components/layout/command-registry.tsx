@@ -210,10 +210,10 @@ export function buildPaletteCommands(ctx: PaletteContext): PaletteCommand[] {
     {
       id: "ai.ask",
       group: "AI",
-      label: "Ask Evam — natural language search…",
+      label: "Ask AssetArt — natural language search…",
       icon: Sparkles,
       shortcut: <kbd>⏎</kbd>,
-      run: stubbed("Asking Evam"),
+      run: stubbed("Asking AssetArt"),
     },
 
     // Workspace

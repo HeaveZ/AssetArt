@@ -31,7 +31,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             <span className="from-brand-orange-400 to-brand-orange-600 flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br shadow-pop">
               <Boxes className="h-5 w-5 text-white" strokeWidth={2.2} />
             </span>
-            <span className="text-[15px] font-medium tracking-tight">Evam Assets</span>
+            <span className="text-[15px] font-medium tracking-tight">AssetArt</span>
           </Link>
         </div>
 
@@ -67,7 +67,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <div className="text-brand-navy-200 relative flex items-center justify-between text-[11px]">
-          <span>© {new Date().getFullYear()} Evam Tech</span>
+          <span>© {new Date().getFullYear()} AssetArt</span>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-white">
               Privacy

@@ -35,7 +35,7 @@ export function Logo({
       </span>
       {!collapsed ? (
         <span className="text-[13.5px] font-medium tracking-tight text-white">
-          Evam Assets
+          AssetArt
         </span>
       ) : null}
     </Link>

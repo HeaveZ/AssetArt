@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     workspaceId: session.user.workspaceId,
   };
 
-  let workspace = { name: "Evam Tech", siteCount: 0 };
+  let workspace = { name: "AssetArt", siteCount: 0 };
   let unreadAlerts = 0;
   try {
     const [ws, alerts] = await Promise.all([

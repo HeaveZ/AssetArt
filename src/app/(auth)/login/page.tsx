@@ -18,7 +18,7 @@ export default function LoginPage({
           Welcome back
         </p>
         <h1 className="text-text text-[26px] font-medium leading-tight tracking-tight">
-          Sign in to Evam Assets
+          Sign in to AssetArt
         </h1>
         <p className="text-text-muted text-[13px] leading-relaxed">
           Enter your credentials to access your workspace. Lost your password?{" "}

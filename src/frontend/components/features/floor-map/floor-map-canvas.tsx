@@ -37,7 +37,7 @@ interface PinPosition {
 
 type PinMap = Record<string, PinPosition>;
 
-const STORAGE_PREFIX = "assetnora:floor-map:";
+const STORAGE_PREFIX = "assetart:floor-map:";
 const MIN_ZOOM = 0.6;
 const MAX_ZOOM = 2.4;
 

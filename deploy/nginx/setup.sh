@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AssetNova · One-shot nginx + certbot setup for Ubuntu/Debian on Contabo.
+# AssetArt · One-shot nginx + certbot setup for Ubuntu/Debian on Contabo.
 #
 # Run as root (or with sudo) on the server, after the app container is up
 # on 127.0.0.1:3000.
 #
-#   sudo ./deploy/nginx/setup.sh assets.evam.com you@evam.com
+#   sudo ./deploy/nginx/setup.sh assets.assetart.com you@assetart.com
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 if [[ $# -lt 2 ]]; then
   echo "Usage: $0 <hostname> <email>"
-  echo "Example: $0 assets.evam.com ops@evam.com"
+  echo "Example: $0 assets.assetart.com ops@assetart.com"
   exit 2
 fi
 
@@ -25,8 +25,8 @@ fi
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC_CONF="${REPO_DIR}/deploy/nginx/nginx.conf"
-TARGET_AVAILABLE="/etc/nginx/sites-available/assetnova.conf"
-TARGET_ENABLED="/etc/nginx/sites-enabled/assetnova.conf"
+TARGET_AVAILABLE="/etc/nginx/sites-available/assetart.conf"
+TARGET_ENABLED="/etc/nginx/sites-enabled/assetart.conf"
 
 echo "→ Updating package lists"
 apt-get update -y

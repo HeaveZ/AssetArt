@@ -8,7 +8,7 @@ export async function GET() {
   return NextResponse.json(
     {
       ok: true,
-      service: "assetnova",
+      service: "assetart",
       time: new Date().toISOString(),
       uptime: process.uptime(),
     },

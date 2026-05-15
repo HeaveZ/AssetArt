@@ -29,7 +29,7 @@ import {
   type PaletteGroup,
 } from "./command-registry";
 
-const RECENT_KEY = "assetnora:palette:recent";
+const RECENT_KEY = "assetart:palette:recent";
 const RECENT_LIMIT = 5;
 const SEARCH_DEBOUNCE_MS = 180;
 

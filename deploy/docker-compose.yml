@@ -1,4 +1,4 @@
-name: evam-assets
+name: assetart
 
 # Local development stack. Values come from `.env.local` (loaded automatically by
 # `docker compose --env-file .env.local up`) or your shell. Plain defaults are
@@ -8,29 +8,29 @@ name: evam-assets
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: evam-postgres
+    container_name: assetart-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-evam}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-evam}
-      POSTGRES_DB: ${POSTGRES_DB:-evam_assets}
+      POSTGRES_USER: ${POSTGRES_USER:-assetart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-assetart}
+      POSTGRES_DB: ${POSTGRES_DB:-assetart}
     ports:
       - "5433:5432"
     volumes:
-      - evam_pgdata:/var/lib/postgresql/data
+      - assetart_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-evam} -d ${POSTGRES_DB:-evam_assets}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-assetart} -d ${POSTGRES_DB:-assetart}"]
       interval: 5s
       timeout: 3s
       retries: 10
 
   mailhog:
     image: mailhog/mailhog:latest
-    container_name: evam-mailhog
+    container_name: assetart-mailhog
     restart: unless-stopped
     ports:
       - "8025:8025" # UI
       - "1025:1025" # SMTP
 
 volumes:
-  evam_pgdata:
+  assetart_pgdata:

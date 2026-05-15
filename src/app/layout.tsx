@@ -19,16 +19,16 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Evam Assets — Enterprise asset intelligence",
-    template: "%s · Evam Assets",
+    default: "AssetArt — Enterprise asset intelligence",
+    template: "%s · AssetArt",
   },
   description:
     "Track every device, license, and lease. Premium asset intelligence for modern IT teams.",
-  applicationName: "Evam Assets",
-  authors: [{ name: "Evam Tech" }],
+  applicationName: "AssetArt",
+  authors: [{ name: "AssetArt" }],
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
   openGraph: {
-    title: "Evam Assets",
+    title: "AssetArt",
     description: "Enterprise asset intelligence for modern IT teams.",
     type: "website",
   },

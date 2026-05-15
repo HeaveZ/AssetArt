@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 12
     env:
       NEXT_TELEMETRY_DISABLED: "1"
-      DATABASE_URL: "postgresql://evam:evam@localhost:5432/evam_assets?schema=public"
+      DATABASE_URL: "postgresql://assetart:assetart@localhost:5432/assetart?schema=public"
       AUTH_SECRET: "ci-secret-32-byte-base64-XXXXXXXXXXXXXX"
       AUTH_URL: "http://localhost:3000"
       NEXT_PUBLIC_APP_URL: "http://localhost:3000"
@@ -66,6 +66,6 @@ jobs:
         with:
           context: .
           push: false
-          tags: assetnova:ci
+          tags: assetart:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max

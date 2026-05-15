@@ -1,4 +1,4 @@
-# Decisions log — Evam Assets
+# Decisions log — AssetArt
 
 > Append-only record of product/architecture choices that deviate from or extend the spec in `CLAUDE_CODE_PROMPT.md`. Newest at top.
 
@@ -27,7 +27,7 @@
 ## 2026-05-15 — Foundation kickoff
 
 ### D-001 Project name
-- Spec uses `evam-assets` for the package name. Repo on disk is already `assetnora` (the user's earlier `pnpm create next-app` choice). Keep `package.json#name = "assetnora"` (matches the working directory) but UI strings + brand stay **Evam Assets**.
+- Spec uses `assetart` for the package name. Repo on disk is already `assetart` (the user's earlier `pnpm create next-app` choice). Keep `package.json#name = "assetart"` (matches the working directory) but UI strings + brand stay **AssetArt**.
 
 ### D-002 Versions
 - Use installed: Next **16**, Prisma **7**, React **19**, Tailwind **v4**, Auth.js **v5-beta**.

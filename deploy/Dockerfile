@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # ─────────────────────────────────────────────────────────────────────────────
-# AssetNova / Evam Assets — production image (Next.js 16 standalone + Prisma 7)
+# AssetArt / AssetArt — production image (Next.js 16 standalone + Prisma 7)
 # Multi-stage:
 #   deps    → install all deps with pnpm
 #   builder → prisma generate + next build → standalone bundle

@@ -1,4 +1,4 @@
-# AssetNova · Evam Assets
+# AssetArt · AssetArt
 
 **Enterprise asset intelligence for modern IT teams.** Track every device, license, and lease in one calm command center — built with Next.js 16, Prisma 7, and Tailwind v4. Visual language: Linear/Notion/Vercel — premium-restrained.
 
@@ -45,7 +45,7 @@ pnpm db:seed
 pnpm dev
 ```
 
-Open `http://localhost:3000` and sign in as `ibrahim@evam.com`. The password is whatever you set as `SEED_DEFAULT_PASSWORD` in `.env.local` before running `pnpm db:seed` — it's never committed to the repo.
+Open `http://localhost:3000` and sign in as `ibrahim@assetart.com`. The password is whatever you set as `SEED_DEFAULT_PASSWORD` in `.env.local` before running `pnpm db:seed` — it's never committed to the repo.
 
 MailHog UI: `http://localhost:8025` (catches Magic Link emails locally).
 
@@ -59,8 +59,8 @@ The image is a self-contained Next.js 16 standalone server that runs Prisma migr
 
 ```bash
 # As a non-root user on the Contabo box
-git clone https://github.com/HeaveZ/AssetNova.git
-cd AssetNova
+git clone https://github.com/HeaveZ/AssetArt.git
+cd AssetArt
 
 # Copy the secrets template and fill in real values:
 cp .env.production.example .env.production
@@ -84,7 +84,7 @@ Pick one:
 
 ```bash
 # As root on the server, after the app is running on :3000
-sudo ./deploy/nginx/setup.sh assets.evam.com ops@evam.com
+sudo ./deploy/nginx/setup.sh assets.assetart.com ops@assetart.com
 ```
 
 The script installs `nginx` + `certbot`, drops in `deploy/nginx/nginx.conf` (rate limiting, HSTS, gzip, websocket upgrade, long cache for `_next/static`), gets a Let's Encrypt certificate via the http-01 challenge, and reloads. Renewal is automatic via `certbot.timer`.
@@ -144,4 +144,4 @@ See `docs/decisions.md` for the full architecture decision log.
 
 ## License
 
-Proprietary — © Evam Tech. All rights reserved.
+Proprietary — © AssetArt. All rights reserved.

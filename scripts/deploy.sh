@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AssetNova — one-shot deploy script for the Contabo box.
+# AssetArt — one-shot deploy script for the Contabo box.
 #
 # Usage on the server:
 #   ./scripts/deploy.sh             # pull, build, migrate, restart
@@ -39,7 +39,7 @@ docker compose -f deploy/docker-compose.prod.yml up -d postgres
 
 echo "→ Waiting for postgres to be healthy"
 for i in $(seq 1 30); do
-  if docker compose -f deploy/docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER:-evam}" >/dev/null 2>&1; then
+  if docker compose -f deploy/docker-compose.prod.yml exec -T postgres pg_isready -U "${POSTGRES_USER:-assetart}" >/dev/null 2>&1; then
     break
   fi
   sleep 1

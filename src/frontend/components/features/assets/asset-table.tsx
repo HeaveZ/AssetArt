@@ -74,7 +74,7 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
     try {
       setExporting(true);
       const base64 = await exportAssetsAction(currentFilters);
-      downloadBase64(base64, MIME.xlsx, `evam-assets-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      downloadBase64(base64, MIME.xlsx, `assetart-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast.success("Exported", { description: `${rows.length} rows downloaded` });
     } catch (err) {
       toast.error("Export failed", { description: err instanceof Error ? err.message : "Try again" });

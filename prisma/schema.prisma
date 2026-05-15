@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Evam Assets — Prisma schema
+//  AssetArt — Prisma schema
 //  Source of truth lives in CLAUDE_CODE_PROMPT.md §6. Deviations:
 //   1. AuditLog uses polymorphic resourceType+resourceId (no direct Asset FK).
 //   2. Auth.js v5 tables (Account / Session / VerificationToken) added.

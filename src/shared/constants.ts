@@ -9,7 +9,7 @@ import type {
   Role,
 } from "@prisma/client";
 
-export const APP_NAME = "Evam Assets";
+export const APP_NAME = "AssetArt";
 export const APP_TAGLINE = "Enterprise asset intelligence";
 
 export const DEFAULT_CURRENCY = "USD";

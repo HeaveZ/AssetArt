@@ -21,7 +21,7 @@ export function LoginForm({ searchParamsPromise }: Props) {
 
   useEffect(() => {
     if (state?.ok) {
-      toast.success("Signed in", { description: "Welcome back to Evam Assets." });
+      toast.success("Signed in", { description: "Welcome back to AssetArt." });
       router.push(search.callbackUrl ?? state.data.redirectTo);
       router.refresh();
     }
@@ -46,7 +46,7 @@ export function LoginForm({ searchParamsPromise }: Props) {
           name="email"
           type="email"
           autoComplete="email"
-          placeholder="you@evam.com"
+          placeholder="you@assetart.com"
           autoFocus
           invalid={fieldError?.field === "email"}
         />
@@ -104,7 +104,7 @@ export function LoginForm({ searchParamsPromise }: Props) {
             Seeded demo account after <code className="font-mono text-[10.5px]">pnpm db:seed</code>:
           </p>
           <p className="text-text mt-1 font-mono text-[11px]">
-            ibrahim@evam.com · use <code>SEED_DEFAULT_PASSWORD</code> from your <code>.env.local</code>
+            ibrahim@assetart.com · use <code>SEED_DEFAULT_PASSWORD</code> from your <code>.env.local</code>
           </p>
         </div>
       ) : null}

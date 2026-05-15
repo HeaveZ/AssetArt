@@ -28,14 +28,14 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 const SEED_USERS: Array<{ email: string; name: string; role: Role }> = [
-  { email: "ibrahim@evam.com", name: "Ibrahim Bekar",  role: "OWNER"   },
-  { email: "elif@evam.com",    name: "Elif Demir",     role: "ADMIN"   },
-  { email: "kerem@evam.com",   name: "Kerem Aksoy",    role: "ADMIN"   },
-  { email: "deniz@evam.com",   name: "Deniz Yıldız",   role: "MANAGER" },
-  { email: "selin@evam.com",   name: "Selin Kaya",     role: "MANAGER" },
-  { email: "burak@evam.com",   name: "Burak Şahin",    role: "MEMBER"  },
-  { email: "ayse@evam.com",    name: "Ayşe Çelik",     role: "MEMBER"  },
-  { email: "mehmet@evam.com",  name: "Mehmet Arslan",  role: "VIEWER"  },
+  { email: "ibrahim@assetart.com", name: "Ibrahim Bekar",  role: "OWNER"   },
+  { email: "elif@assetart.com",    name: "Elif Demir",     role: "ADMIN"   },
+  { email: "kerem@assetart.com",   name: "Kerem Aksoy",    role: "ADMIN"   },
+  { email: "deniz@assetart.com",   name: "Deniz Yıldız",   role: "MANAGER" },
+  { email: "selin@assetart.com",   name: "Selin Kaya",     role: "MANAGER" },
+  { email: "burak@assetart.com",   name: "Burak Şahin",    role: "MEMBER"  },
+  { email: "ayse@assetart.com",    name: "Ayşe Çelik",     role: "MEMBER"  },
+  { email: "mehmet@assetart.com",  name: "Mehmet Arslan",  role: "VIEWER"  },
 ];
 
 const SITE_DATA = [
@@ -96,7 +96,7 @@ function pad(n: number, len: number): string {
 }
 
 async function main() {
-  console.info("🌱 Seeding Evam Assets…");
+  console.info("🌱 Seeding AssetArt…");
 
   // ───────── Reset (idempotent) ─────────
   console.info("  ↻ wiping existing data");
@@ -129,8 +129,8 @@ async function main() {
   console.info("  ✓ workspace");
   const workspace = await prisma.workspace.create({
     data: {
-      name: "Evam Tech",
-      slug: "evam-tech",
+      name: "AssetArt",
+      slug: "assetart",
       currency: "USD",
       timezone: "Europe/Istanbul",
       fiscalYearStart: 1,
@@ -155,7 +155,7 @@ async function main() {
     ),
   );
   const userByEmail = Object.fromEntries(users.map((u) => [u.email, u]));
-  const ibrahim = userByEmail["ibrahim@evam.com"]!;
+  const ibrahim = userByEmail["ibrahim@assetart.com"]!;
 
   // ───────── Sites + Locations ─────────
   console.info("  ✓ sites + locations");
@@ -200,7 +200,7 @@ async function main() {
         workspaceId: workspace.id,
         firstName: first,
         lastName: last,
-        email: `${first.toLowerCase()}.${last.toLowerCase()}@evam.com`.replace(/[^a-z0-9.@]/g, ""),
+        email: `${first.toLowerCase()}.${last.toLowerCase()}@assetart.com`.replace(/[^a-z0-9.@]/g, ""),
         employeeId: `EMP-${pad(1000 + i, 4)}`,
         jobTitle: rand(["Engineer","Designer","Analyst","Coordinator","Specialist","Lead"]),
         departmentId: dept.id,
@@ -426,7 +426,7 @@ async function main() {
   await prisma.auditLog.createMany({ data: auditPayload });
 
   console.info(`\n✅ Seed complete · Workspace "${workspace.name}" · ${users.length} users · ${assets.length} assets`);
-  console.info("Login: ibrahim@evam.com (password from SEED_DEFAULT_PASSWORD in your .env)\n");
+  console.info("Login: ibrahim@assetart.com (password from SEED_DEFAULT_PASSWORD in your .env)\n");
 }
 
 main()
