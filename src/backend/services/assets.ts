@@ -155,6 +155,37 @@ export async function getAssetDetail(workspaceId: string, id: string) {
   return { ...asset, auditLogs };
 }
 
+import type { AssetStatus } from "@prisma/client";
+
+export interface RelatedAsset {
+  id: string;
+  tag: string;
+  name: string;
+  status: AssetStatus;
+  brand: string | null;
+  model: string | null;
+}
+
+export async function listRelatedAssets(
+  workspaceId: string,
+  assetId: string,
+  filters: { categoryId: string | null; siteId: string | null },
+): Promise<RelatedAsset[]> {
+  if (!filters.categoryId && !filters.siteId) return [];
+  return prisma.asset.findMany({
+    where: {
+      workspaceId,
+      deletedAt: null,
+      id: { not: assetId },
+      ...(filters.categoryId ? { categoryId: filters.categoryId } : {}),
+      ...(filters.siteId ? { siteId: filters.siteId } : {}),
+    },
+    take: 6,
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, tag: true, name: true, status: true, brand: true, model: true },
+  });
+}
+
 export type AssetFacets = {
   sites: { id: string; name: string }[];
   categories: { id: string; name: string }[];

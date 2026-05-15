@@ -1,24 +1,41 @@
 import type { Metadata } from "next";
-import { Map as MapIcon } from "lucide-react";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { PageHeader } from "@/frontend/components/common/page-header";
-import { EmptyState } from "@/frontend/components/common/empty-state";
 import { Badge } from "@/frontend/components/ui/badge";
+import { FloorMapCanvas } from "@/frontend/components/features/floor-map/floor-map-canvas";
+import { listFloorMapSites, listFloorMapAssets } from "@/backend/services/floor-map";
 
 export const metadata: Metadata = { title: "Floor map" };
 
-export default function FloorMapPage() {
+interface PageProps {
+  searchParams: Promise<{ site?: string }>;
+}
+
+export default async function FloorMapPage({ searchParams }: PageProps) {
+  const session = await auth();
+  if (!session?.user?.workspaceId) redirect("/login");
+
+  const sites = await listFloorMapSites(session.user.workspaceId);
+  const { site } = await searchParams;
+  const initialSiteId = site && sites.some((s) => s.id === site) ? site : sites[0]?.id ?? null;
+
+  const assets = initialSiteId
+    ? await listFloorMapAssets(session.user.workspaceId, initialSiteId)
+    : [];
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Floor map"
-        description="Drag and drop asset pins onto your site floor plans."
-        meta={<Badge tone="orange" size="md">New · premium</Badge>}
+        description="Drag assets onto the canvas, click a pin to open its detail. Layout saves locally per site."
+        meta={
+          <Badge tone="orange" size="md">
+            Beta · client-side
+          </Badge>
+        }
       />
-      <EmptyState
-        icon={MapIcon}
-        title="Floor map editor arrives in milestone 11"
-        description="Upload SVG/PNG plans per site, pin assets, click a pin to open its detail."
-      />
+      <FloorMapCanvas sites={sites} initialSiteId={initialSiteId} assets={assets} />
     </div>
   );
 }
