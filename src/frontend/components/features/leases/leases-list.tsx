@@ -8,6 +8,7 @@ import { CircleX, Loader2, ReceiptText, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/frontend/components/ui/button";
 import { Badge } from "@/frontend/components/ui/badge";
+import { FilterTabs } from "@/frontend/components/common/filter-tabs";
 import { LEASE_STATUS_META } from "@/shared/constants";
 import { formatDate, formatMoney } from "@/shared/format";
 import { cn } from "@/frontend/lib/utils";
@@ -15,26 +16,29 @@ import { cancelLeaseAction, regenerateLeaseAlertsAction } from "@/backend/action
 import type { LeaseRow } from "@/backend/services/leases";
 import type { LeaseSegment } from "@/shared/schemas/lease";
 
+type SegmentTab = "ALL" | LeaseSegment;
+
 interface Props {
   rows: LeaseRow[];
   counts: Record<LeaseSegment, number>;
 }
 
-const TABS: { value: "ALL" | LeaseSegment; label: string }[] = [
-  { value: "ALL", label: "All" },
-  { value: "ACTIVE", label: "Active" },
-  { value: "EXPIRING", label: "Expiring soon" },
-  { value: "ENDED", label: "Ended" },
-];
+const SEGMENT_LABELS: Record<SegmentTab, string> = {
+  ALL: "All",
+  ACTIVE: "Active",
+  EXPIRING: "Expiring soon",
+  ENDED: "Ended",
+};
+const SEGMENT_ORDER: SegmentTab[] = ["ALL", "ACTIVE", "EXPIRING", "ENDED"];
 
 export function LeasesList({ rows, counts }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  const active = (searchParams.get("segment") ?? "ALL") as "ALL" | LeaseSegment;
+  const active = (searchParams.get("segment") ?? "ALL") as SegmentTab;
 
-  function setSegment(next: string) {
+  function setSegment(next: SegmentTab) {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "ALL") params.delete("segment");
     else params.set("segment", next);
@@ -60,32 +64,16 @@ export function LeasesList({ rows, counts }: Props) {
   }
 
   const allCount = counts.ACTIVE + counts.EXPIRING + counts.ENDED;
+  const filterTabs = SEGMENT_ORDER.map((value) => ({
+    value,
+    label: SEGMENT_LABELS[value],
+    count: value === "ALL" ? allCount : counts[value],
+  }));
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="bg-surface flex flex-wrap items-center gap-1 rounded-lg border p-1">
-          {TABS.map((tab) => {
-            const count = tab.value === "ALL" ? allCount : counts[tab.value];
-            const isActive = active === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setSegment(tab.value)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                  isActive ? "bg-brand-orange-500/10 text-brand-orange-700" : "text-text-muted hover:text-text",
-                )}
-              >
-                {tab.label}
-                <span className={cn("text-[10.5px]", isActive ? "text-brand-orange-700/80" : "text-text-subtle")}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <FilterTabs tabs={filterTabs} active={active} onChange={setSegment} />
         <Button variant="ghost" size="sm" onClick={recompute} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           Regenerate expiring alerts

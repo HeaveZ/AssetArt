@@ -20,6 +20,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/frontend/components/ui/button";
 import { Checkbox } from "@/frontend/components/ui/checkbox";
+import { FilterTabs } from "@/frontend/components/common/filter-tabs";
 import { cn } from "@/frontend/lib/utils";
 import {
   dismissAlertsAction,
@@ -47,13 +48,12 @@ const TYPE_ICON: Record<AlertType, typeof AlertTriangle> = {
   ASSET_MISSING: SearchX,
 };
 
-const READ_TABS: { value: "ALL" | "UNREAD" | "READ"; label: string }[] = [
-  { value: "ALL", label: "All" },
-  { value: "UNREAD", label: "Unread" },
-  { value: "READ", label: "Read" },
-];
+type ReadState = "ALL" | "UNREAD" | "READ";
+type SeverityFilter = "ALL" | AlertSeverity;
 
-const SEVERITY_FILTERS: AlertSeverity[] = ["CRITICAL", "WARNING", "INFO"];
+const READ_TAB_LABEL: Record<ReadState, string> = { ALL: "All", UNREAD: "Unread", READ: "Read" };
+const READ_TAB_ORDER: ReadState[] = ["ALL", "UNREAD", "READ"];
+const SEVERITY_TAB_ORDER: SeverityFilter[] = ["ALL", "CRITICAL", "WARNING", "INFO"];
 
 export function AlertsInbox({ rows, total, unreadCount }: Props) {
   const router = useRouter();
@@ -61,8 +61,18 @@ export function AlertsInbox({ rows, total, unreadCount }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
-  const readState = (searchParams.get("read") ?? "ALL") as "ALL" | "UNREAD" | "READ";
-  const activeSeverity = searchParams.get("severity");
+  const readState = (searchParams.get("read") ?? "ALL") as ReadState;
+  const activeSeverity = (searchParams.get("severity") ?? "ALL") as SeverityFilter;
+
+  const readTabs = READ_TAB_ORDER.map((value) => ({
+    value,
+    label: READ_TAB_LABEL[value],
+    count: value === "UNREAD" ? unreadCount : value === "ALL" ? total : undefined,
+  }));
+  const severityTabs = SEVERITY_TAB_ORDER.map((value) => ({
+    value,
+    label: value === "ALL" ? "Any severity" : ALERT_SEVERITY_META[value].label,
+  }));
 
   function setParam(key: string, value: string | null) {
     const params = new URLSearchParams(searchParams.toString());
@@ -128,59 +138,16 @@ export function AlertsInbox({ rows, total, unreadCount }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="bg-surface inline-flex items-center gap-1 rounded-lg border p-1">
-            {READ_TABS.map((tab) => {
-              const active = readState === tab.value;
-              const count = tab.value === "UNREAD" ? unreadCount : tab.value === "ALL" ? total : null;
-              return (
-                <button
-                  key={tab.value}
-                  type="button"
-                  onClick={() => setParam("read", tab.value === "ALL" ? null : tab.value)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                    active ? "bg-brand-orange-500/10 text-brand-orange-700" : "text-text-muted hover:text-text",
-                  )}
-                >
-                  {tab.label}
-                  {count !== null ? (
-                    <span className={cn("text-[10.5px]", active ? "text-brand-orange-700/80" : "text-text-subtle")}>
-                      {count}
-                    </span>
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
-          <div className="bg-surface inline-flex items-center gap-1 rounded-lg border p-1">
-            <button
-              type="button"
-              onClick={() => setParam("severity", null)}
-              className={cn(
-                "inline-flex items-center rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                !activeSeverity ? "bg-brand-orange-500/10 text-brand-orange-700" : "text-text-muted hover:text-text",
-              )}
-            >
-              Any severity
-            </button>
-            {SEVERITY_FILTERS.map((s) => {
-              const meta = ALERT_SEVERITY_META[s];
-              const active = activeSeverity === s;
-              return (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setParam("severity", s)}
-                  className={cn(
-                    "inline-flex items-center rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                    active ? "bg-brand-orange-500/10 text-brand-orange-700" : "text-text-muted hover:text-text",
-                  )}
-                >
-                  {meta.label}
-                </button>
-              );
-            })}
-          </div>
+          <FilterTabs
+            tabs={readTabs}
+            active={readState}
+            onChange={(v) => setParam("read", v === "ALL" ? null : v)}
+          />
+          <FilterTabs
+            tabs={severityTabs}
+            active={activeSeverity}
+            onChange={(v) => setParam("severity", v === "ALL" ? null : v)}
+          />
         </div>
         <div className="flex items-center gap-1.5">
           {selected.size > 0 ? (

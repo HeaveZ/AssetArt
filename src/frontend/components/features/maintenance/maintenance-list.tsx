@@ -8,6 +8,7 @@ import { Check, CircleX, Loader2, PlayCircle, RefreshCw, Wrench } from "lucide-r
 import { toast } from "sonner";
 import { Button } from "@/frontend/components/ui/button";
 import { Badge } from "@/frontend/components/ui/badge";
+import { FilterTabs } from "@/frontend/components/common/filter-tabs";
 import {
   cancelMaintenanceAction,
   completeMaintenanceAction,
@@ -16,9 +17,10 @@ import {
 } from "@/backend/actions/maintenance";
 import { MAINTENANCE_STATUS_META, MAINTENANCE_TYPE_META } from "@/shared/constants";
 import { formatDate, formatMoney } from "@/shared/format";
-import { cn } from "@/frontend/lib/utils";
 import type { MaintenanceRow } from "@/backend/services/maintenance";
 import type { MaintenanceStatus } from "@prisma/client";
+
+type StatusTab = "ALL" | MaintenanceStatus;
 
 interface Props {
   rows: MaintenanceRow[];
@@ -26,23 +28,30 @@ interface Props {
   total: number;
 }
 
-const STATUS_TABS: { value: "ALL" | MaintenanceStatus; label: string }[] = [
-  { value: "ALL", label: "All" },
-  { value: "SCHEDULED", label: "Scheduled" },
-  { value: "IN_PROGRESS", label: "In progress" },
-  { value: "OVERDUE", label: "Overdue" },
-  { value: "COMPLETED", label: "Completed" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
+const STATUS_LABELS: Record<StatusTab, string> = {
+  ALL: "All",
+  SCHEDULED: "Scheduled",
+  IN_PROGRESS: "In progress",
+  OVERDUE: "Overdue",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+const STATUS_ORDER: StatusTab[] = ["ALL", "SCHEDULED", "IN_PROGRESS", "OVERDUE", "COMPLETED", "CANCELLED"];
 
 export function MaintenanceList({ rows, counts, total }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
 
-  const activeStatus = searchParams.get("status") ?? "ALL";
+  const activeStatus = (searchParams.get("status") ?? "ALL") as StatusTab;
 
-  function setStatus(next: string) {
+  const filterTabs = STATUS_ORDER.map((value) => ({
+    value,
+    label: STATUS_LABELS[value],
+    count: value === "ALL" ? total : counts[value],
+  }));
+
+  function setStatus(next: StatusTab) {
     const params = new URLSearchParams(searchParams.toString());
     if (next === "ALL") params.delete("status");
     else params.set("status", next);
@@ -71,28 +80,7 @@ export function MaintenanceList({ rows, counts, total }: Props) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="bg-surface flex flex-wrap items-center gap-1 rounded-lg border p-1">
-          {STATUS_TABS.map((tab) => {
-            const count = tab.value === "ALL" ? total : counts[tab.value];
-            const active = activeStatus === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setStatus(tab.value)}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors",
-                  active ? "bg-brand-orange-500/10 text-brand-orange-700" : "text-text-muted hover:text-text",
-                )}
-              >
-                {tab.label}
-                <span className={cn("text-[10.5px]", active ? "text-brand-orange-700/80" : "text-text-subtle")}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <FilterTabs tabs={filterTabs} active={activeStatus} onChange={setStatus} />
         <Button variant="ghost" size="sm" onClick={runRecompute} disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : <RefreshCw />}
           Recompute overdue
