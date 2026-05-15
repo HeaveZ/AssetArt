@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Search } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/frontend/components/ui/button";
 import { Input } from "@/frontend/components/ui/input";
 import { Label } from "@/frontend/components/ui/label";
 import { Textarea } from "@/frontend/components/ui/textarea";
+import { AssetQuickPicker } from "@/frontend/components/common/asset-quick-picker";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +39,6 @@ export function MaintenanceFormDialog({ assets }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [assetId, setAssetId] = useState<string>("");
-  const [assetQuery, setAssetQuery] = useState("");
   const [type, setType] = useState<MaintenanceTypeInput>("PREVENTIVE");
   const [scheduledAt, setScheduledAt] = useState("");
   const [vendor, setVendor] = useState("");
@@ -46,17 +46,8 @@ export function MaintenanceFormDialog({ assets }: Props) {
   const [cost, setCost] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const filteredAssets = useMemo(() => {
-    const q = assetQuery.trim().toLowerCase();
-    if (!q) return assets.slice(0, 50);
-    return assets
-      .filter((a) => `${a.tag} ${a.name}`.toLowerCase().includes(q))
-      .slice(0, 50);
-  }, [assets, assetQuery]);
-
   function reset() {
     setAssetId("");
-    setAssetQuery("");
     setType("PREVENTIVE");
     setScheduledAt("");
     setVendor("");
@@ -110,42 +101,7 @@ export function MaintenanceFormDialog({ assets }: Props) {
         </DialogHeader>
 
         <div className="space-y-3">
-          <div>
-            <Label className="mb-1 text-[11.5px]">Asset</Label>
-            <div className="relative">
-              <Search className="text-text-subtle pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
-              <Input
-                value={assetQuery}
-                onChange={(e) => setAssetQuery(e.target.value)}
-                placeholder="Search by tag or name…"
-                className="h-8 pl-8 text-[12.5px]"
-              />
-            </div>
-            <div className="mt-1.5 max-h-40 overflow-y-auto rounded-md border">
-              {filteredAssets.length === 0 ? (
-                <p className="text-text-muted px-3 py-3 text-center text-[12px]">No matches.</p>
-              ) : (
-                <ul className="divide-y divide-border-subtle">
-                  {filteredAssets.map((a) => (
-                    <li key={a.id}>
-                      <button
-                        type="button"
-                        onClick={() => setAssetId(a.id)}
-                        className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] transition-colors ${
-                          assetId === a.id
-                            ? "bg-brand-orange-500/5 text-text"
-                            : "hover:bg-surface-muted/60 text-text-muted"
-                        }`}
-                      >
-                        <span className="asset-tag text-[11px]">{a.tag}</span>
-                        <span className="truncate">{a.name}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+          <AssetQuickPicker assets={assets} value={assetId} onChange={setAssetId} />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
