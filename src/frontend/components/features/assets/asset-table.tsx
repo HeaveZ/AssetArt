@@ -85,9 +85,9 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
 
   function setSort(column: AssetFiltersInput["sort"]) {
     if (sorting.sort === column) {
-      void setSorting({ order: sorting.order === "asc" ? "desc" : "asc" });
+      setSorting({ order: sorting.order === "asc" ? "desc" : "asc" }).catch(() => {});
     } else {
-      void setSorting({ sort: column, order: "desc" });
+      setSorting({ sort: column, order: "desc" }).catch(() => {});
     }
   }
 

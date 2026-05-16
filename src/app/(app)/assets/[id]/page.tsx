@@ -240,39 +240,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             />
           ) : (
             <ol className="bg-surface divide-y divide-border-subtle rounded-xl border">
-              {asset.checkouts.map((co) => {
-                const target =
-                  co.toUser?.name ??
-                  co.toUser?.email ??
-                  (co.toPerson ? `${co.toPerson.firstName} ${co.toPerson.lastName}` : null) ??
-                  co.toSite?.name ??
-                  co.toCustomer?.name ??
-                  "—";
-                return (
-                  <li key={co.id} className="flex items-start gap-3 px-4 py-3">
-                    {co.returnedAt ? (
-                      <ArrowDownToLine className="text-info-fg mt-0.5 h-4 w-4 shrink-0" />
-                    ) : (
-                      <ArrowUpFromLine className="text-success-fg mt-0.5 h-4 w-4 shrink-0" />
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-text text-[12.5px]">
-                        <span className="font-medium">{co.returnedAt ? "Returned from" : "Checked out to"}</span>{" "}
-                        <span className="text-text">{target}</span>
-                      </p>
-                      <p className="text-text-muted text-[11.5px]">
-                        {formatDateTime(co.checkedOutAt)}
-                        {co.dueAt ? ` · due ${formatDate(co.dueAt)}` : ""}
-                        {co.returnedAt ? ` · returned ${formatDate(co.returnedAt)}` : ""}
-                      </p>
-                      {co.notes ? <p className="text-text-muted mt-1 text-[12px]">{co.notes}</p> : null}
-                    </div>
-                    <Badge tone={co.returnedAt ? "muted" : "success"} size="md">
-                      {co.returnedAt ? "Returned" : "Active"}
-                    </Badge>
-                  </li>
-                );
-              })}
+              {asset.checkouts.map((co) => (
+                <CheckoutListItem key={co.id} co={co} />
+              ))}
             </ol>
           )}
         </TabsContent>
@@ -288,34 +258,9 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             />
           ) : (
             <ol className="bg-surface divide-y divide-border-subtle rounded-xl border">
-              {asset.maintenance.map((m) => {
-                const typeMeta = MAINTENANCE_TYPE_META[m.type];
-                const statusMeta = MAINTENANCE_STATUS_META[m.status];
-                return (
-                  <li key={m.id} className="flex items-start gap-3 px-4 py-3">
-                    <Wrench className="text-warning-fg mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-text text-[12.5px] font-medium">{typeMeta.label}</span>
-                        <Badge tone={statusMeta.tone === "muted" ? "muted" : statusMeta.tone} size="md">
-                          {statusMeta.label}
-                        </Badge>
-                      </div>
-                      <p className="text-text-muted mt-0.5 text-[11.5px]">
-                        {m.scheduledAt ? `Scheduled ${formatDate(m.scheduledAt)}` : "Not scheduled"}
-                        {m.completedAt ? ` · completed ${formatDate(m.completedAt)}` : ""}
-                        {m.vendor ? ` · ${m.vendor}` : ""}
-                      </p>
-                      {m.description ? <p className="text-text mt-1 text-[12px]">{m.description}</p> : null}
-                    </div>
-                    {m.cost ? (
-                      <span className="text-text num text-[12.5px] font-medium">
-                        {formatMoney(m.cost.toString(), m.currency)}
-                      </span>
-                    ) : null}
-                  </li>
-                );
-              })}
+              {asset.maintenance.map((m) => (
+                <MaintenanceListItem key={m.id} m={m} />
+              ))}
             </ol>
           )}
         </TabsContent>
@@ -386,16 +331,7 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
           ) : (
             <ol className="bg-surface divide-y divide-border-subtle rounded-xl border">
               {asset.auditLogs.map((log) => (
-                <li key={log.id} className="flex items-start gap-3 px-4 py-3">
-                  <UserAvatar name={log.actor.name ?? log.actor.email} src={log.actor.image} size={28} />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-text text-[12.5px]">
-                      <span className="font-medium">{log.actor.name ?? log.actor.email}</span>{" "}
-                      <span className="text-text-muted">{log.action}</span>
-                    </p>
-                    <p className="text-text-subtle text-[11px]">{timeAgo(log.createdAt)}</p>
-                  </div>
-                </li>
+                <AuditLogListItem key={log.id} log={log} />
               ))}
             </ol>
           )}
@@ -422,5 +358,117 @@ function DetailRow({ label, value, mono = false }: { label: string; value: strin
         {value ?? "—"}
       </dd>
     </div>
+  );
+}
+
+type CheckoutForList = {
+  id: string;
+  checkedOutAt: Date;
+  returnedAt: Date | null;
+  dueAt: Date | null;
+  notes: string | null;
+  toUser?: { name: string | null; email: string } | null;
+  toPerson?: { firstName: string; lastName: string } | null;
+  toSite?: { name: string } | null;
+  toCustomer?: { name: string } | null;
+};
+
+function pickCheckoutTarget(co: CheckoutForList): string {
+  if (co.toUser) return co.toUser.name ?? co.toUser.email;
+  if (co.toPerson) return `${co.toPerson.firstName} ${co.toPerson.lastName}`;
+  if (co.toSite) return co.toSite.name;
+  if (co.toCustomer) return co.toCustomer.name;
+  return "—";
+}
+
+function CheckoutListItem({ co }: { co: CheckoutForList }) {
+  const returned = co.returnedAt;
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      {returned ? (
+        <ArrowDownToLine className="text-info-fg mt-0.5 h-4 w-4 shrink-0" />
+      ) : (
+        <ArrowUpFromLine className="text-success-fg mt-0.5 h-4 w-4 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-text text-[12.5px]">
+          <span className="font-medium">{returned ? "Returned from" : "Checked out to"}</span>{" "}
+          <span className="text-text">{pickCheckoutTarget(co)}</span>
+        </p>
+        <p className="text-text-muted text-[11.5px]">
+          {formatDateTime(co.checkedOutAt)}
+          {co.dueAt ? ` · due ${formatDate(co.dueAt)}` : ""}
+          {returned ? ` · returned ${formatDate(returned)}` : ""}
+        </p>
+        {co.notes ? <p className="text-text-muted mt-1 text-[12px]">{co.notes}</p> : null}
+      </div>
+      <Badge tone={returned ? "muted" : "success"} size="md">
+        {returned ? "Returned" : "Active"}
+      </Badge>
+    </li>
+  );
+}
+
+type MaintenanceForList = {
+  id: string;
+  type: keyof typeof MAINTENANCE_TYPE_META;
+  status: keyof typeof MAINTENANCE_STATUS_META;
+  scheduledAt: Date | null;
+  completedAt: Date | null;
+  vendor: string | null;
+  description: string | null;
+  cost: { toString(): string } | null;
+  currency: string;
+};
+
+function MaintenanceListItem({ m }: { m: MaintenanceForList }) {
+  const typeMeta = MAINTENANCE_TYPE_META[m.type];
+  const statusMeta = MAINTENANCE_STATUS_META[m.status];
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      <Wrench className="text-warning-fg mt-0.5 h-4 w-4 shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="text-text text-[12.5px] font-medium">{typeMeta.label}</span>
+          <Badge tone={statusMeta.tone === "muted" ? "muted" : statusMeta.tone} size="md">
+            {statusMeta.label}
+          </Badge>
+        </div>
+        <p className="text-text-muted mt-0.5 text-[11.5px]">
+          {m.scheduledAt ? `Scheduled ${formatDate(m.scheduledAt)}` : "Not scheduled"}
+          {m.completedAt ? ` · completed ${formatDate(m.completedAt)}` : ""}
+          {m.vendor ? ` · ${m.vendor}` : ""}
+        </p>
+        {m.description ? <p className="text-text mt-1 text-[12px]">{m.description}</p> : null}
+      </div>
+      {m.cost ? (
+        <span className="text-text num text-[12.5px] font-medium">
+          {formatMoney(m.cost.toString(), m.currency)}
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+type AuditLogForList = {
+  id: string;
+  createdAt: Date;
+  action: string;
+  actor: { name: string | null; email: string; image: string | null };
+};
+
+function AuditLogListItem({ log }: { log: AuditLogForList }) {
+  const display = log.actor.name ?? log.actor.email;
+  return (
+    <li className="flex items-start gap-3 px-4 py-3">
+      <UserAvatar name={display} src={log.actor.image} size={28} />
+      <div className="min-w-0 flex-1">
+        <p className="text-text text-[12.5px]">
+          <span className="font-medium">{display}</span>{" "}
+          <span className="text-text-muted">{log.action}</span>
+        </p>
+        <p className="text-text-subtle text-[11px]">{timeAgo(log.createdAt)}</p>
+      </div>
+    </li>
   );
 }

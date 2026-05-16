@@ -29,7 +29,7 @@ export function AssetSearch() {
   useEffect(() => {
     if (draft === null) return;
     const t = setTimeout(() => {
-      void setQ(draft || null);
+      setQ(draft || null).catch(() => {});
       setDraft(null);
     }, 280);
     return () => clearTimeout(t);
