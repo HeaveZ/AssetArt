@@ -57,7 +57,17 @@ pipeline {
         // Build context kökü ve compose dosyası
         DOCKERFILE     = 'deploy/Dockerfile'
         COMPOSE_FILE   = 'deploy/docker-compose.prod.yml'
-        STACK_NAME     = 'assetart'
+        // ÖNEMLİ: compose YAML "name: assetnova" diyor; mevcut prod bu project
+        // adıyla deploy edilmiş (volume'lar `assetnova_postgres_data` vs.).
+        // -p flag ile başka bir ad set edilirse compose YENİ namespace açar →
+        // container name çakışması + boş volume = veri kaybı. assetnova kalsın.
+        STACK_NAME     = 'assetnova'
+
+        // Sonar: tekrar eden literal'ları sabit yap (DRY).
+        BUILTIN          = 'built-in'
+        WORKSPACE_STASH  = 'workspace'
+        DEPS_STASH       = 'deps'
+        DOCKER_ROOT_ARGS = '-u root'
     }
 
     options {
@@ -91,16 +101,18 @@ pipeline {
                 echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
                 echo "[BAŞLA] Kaynak kod çekiliyor (branch=${env.BRANCH_NAME ?: 'n/a'})"
                 checkout scm
-                stash includes: '**', name: 'workspace'
-                echo "[BİTİŞ] Checkout + workspace stash tamamlandı"
+                stash includes: '**', name: "${WORKSPACE_STASH}"
+                echo "[BİTİŞ] Checkout + ${WORKSPACE_STASH} stash tamamlandı"
             }
         }
 
         // ------------------------------------------------------
-        // 2) INSTALL DEPENDENCIES — single ws (paylaşımlı)
-        // pnpm install --frozen-lockfile; Lint/Typecheck/Audit
-        // aşamaları aynı ws() path'ini reuse eder → node_modules disk'te kalır,
-        // tekrar install yapılmaz. node:20-alpine + corepack pnpm@9.
+        // 2) INSTALL DEPENDENCIES — kendi ws'inde, sonunda 'deps' stash
+        // pnpm install --frozen-lockfile çalışır, node_modules üretilir,
+        // ardından `stash includes: 'node_modules/**', name: DEPS_STASH`
+        // ile paralel branch'lerin (Lint/Typecheck/Audit) kullanması için
+        // saklanır. Her downstream branch kendi ws'inde unstash eder →
+        // Jenkins'in ws() concurrent-occupy koruması (@2 suffix) tetiklenmez.
         //
         // POSTINSTALL = "prisma generate" → @prisma/client üretilmesini
         // ister; bu yüzden install içinde otomatik tetiklenir.
@@ -114,10 +126,10 @@ pipeline {
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
-                        ws("workspace/${env.JOB_NAME}-quality-${env.BUILD_NUMBER}") {
-                            unstash 'workspace'
-                            docker.image('node:20-alpine').inside('-u root') {
+                    node(env.BUILTIN) {
+                        ws("workspace/${env.JOB_NAME}-install-${env.BUILD_NUMBER}") {
+                            unstash "${WORKSPACE_STASH}"
+                            docker.image('node:20-alpine').inside("${DOCKER_ROOT_ARGS}") {
                                 sh '''
                                     set -e
                                     echo "[BAŞLA] pnpm install --frozen-lockfile"
@@ -128,6 +140,8 @@ pipeline {
                                     echo "[BİTİŞ] Dependencies kurulu (node_modules + prisma client)"
                                 '''
                             }
+                            echo "[STASH] node_modules paylaşılacak → '${DEPS_STASH}'"
+                            stash includes: 'node_modules/**', name: "${DEPS_STASH}"
                         }
                     }
                 }
@@ -135,9 +149,12 @@ pipeline {
         }
 
         // ------------------------------------------------------
-        // 3) LINT & TYPECHECK — paralel (2 iş, paylaşımlı ws)
-        // Aynı ws() path'inde node_modules zaten var; iki paralel branch
-        // pnpm lint ve pnpm typecheck koşturur. Hız için paralel.
+        // 3) LINT & TYPECHECK — paralel (iki bağımsız ws)
+        // Her branch kendi ws'inde çalışır → Jenkins'in concurrent-occupy
+        // koruması (@2 suffix) hiç tetiklenmez. Her branch:
+        //   1) unstash workspace (source)
+        //   2) unstash deps (node_modules — Install stage'inden)
+        //   3) işini koştur (lint VEYA typecheck)
         // ------------------------------------------------------
         stage('Lint & Typecheck') {
             agent none
@@ -146,9 +163,11 @@ pipeline {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
                     parallel(
                         'lint': {
-                            node('built-in') {
-                                ws("workspace/${env.JOB_NAME}-quality-${env.BUILD_NUMBER}") {
-                                    docker.image('node:20-alpine').inside('-u root') {
+                            node(env.BUILTIN) {
+                                ws("workspace/${env.JOB_NAME}-lint-${env.BUILD_NUMBER}") {
+                                    unstash "${WORKSPACE_STASH}"
+                                    unstash "${DEPS_STASH}"
+                                    docker.image('node:20-alpine').inside("${DOCKER_ROOT_ARGS}") {
                                         sh '''
                                             set -e
                                             corepack enable
@@ -162,9 +181,11 @@ pipeline {
                             }
                         },
                         'typecheck': {
-                            node('built-in') {
-                                ws("workspace/${env.JOB_NAME}-quality-${env.BUILD_NUMBER}") {
-                                    docker.image('node:20-alpine').inside('-u root') {
+                            node(env.BUILTIN) {
+                                ws("workspace/${env.JOB_NAME}-typecheck-${env.BUILD_NUMBER}") {
+                                    unstash "${WORKSPACE_STASH}"
+                                    unstash "${DEPS_STASH}"
+                                    docker.image('node:20-alpine').inside("${DOCKER_ROOT_ARGS}") {
                                         sh '''
                                             set -e
                                             corepack enable
@@ -185,16 +206,18 @@ pipeline {
         // ------------------------------------------------------
         // 4) DEPENDENCY SCAN — pnpm audit --audit-level=high
         // High+ severity CVE bulunursa exit kodu non-zero → pipeline fail.
-        // Aynı ws() path'ini reuse eder.
+        // Kendi ws'i + workspace + deps unstash.
         // ------------------------------------------------------
         stage('Dependency Scan') {
             agent none
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
-                        ws("workspace/${env.JOB_NAME}-quality-${env.BUILD_NUMBER}") {
-                            docker.image('node:20-alpine').inside('-u root') {
+                    node(env.BUILTIN) {
+                        ws("workspace/${env.JOB_NAME}-audit-${env.BUILD_NUMBER}") {
+                            unstash "${WORKSPACE_STASH}"
+                            unstash "${DEPS_STASH}"
+                            docker.image('node:20-alpine').inside("${DOCKER_ROOT_ARGS}") {
                                 sh '''
                                     set -e
                                     corepack enable
@@ -222,9 +245,9 @@ pipeline {
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         ws("workspace/${env.JOB_NAME}-gitleaks-${env.BUILD_NUMBER}") {
-                            unstash 'workspace'
+                            unstash "${WORKSPACE_STASH}"
                             echo "[BAŞLA] Gitleaks secret scan"
                             sh '''
                                 docker run --rm \
@@ -251,13 +274,13 @@ pipeline {
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         ws("workspace/${env.JOB_NAME}-sonar-${env.BUILD_NUMBER}") {
-                            unstash 'workspace'
+                            unstash "${WORKSPACE_STASH}"
                             echo "[BAŞLA] SonarCloud analizi (src/)"
                             sh 'rm -rf .scannerwork || true'
                             withSonarQubeEnv('SonarCloud') {
-                                docker.image('sonarsource/sonar-scanner-cli:latest').inside('-u root --entrypoint=""') {
+                                docker.image('sonarsource/sonar-scanner-cli:latest').inside("${DOCKER_ROOT_ARGS} --entrypoint=\"\"") {
                                     sh '''
                                         sonar-scanner \
                                           -Dsonar.projectKey=HeaveZ_AssetNova \
@@ -286,9 +309,9 @@ pipeline {
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         ws("workspace/${env.JOB_NAME}-trivy-fs-${env.BUILD_NUMBER}") {
-                            unstash 'workspace'
+                            unstash "${WORKSPACE_STASH}"
                             echo "[BAŞLA] Trivy filesystem scan (CRITICAL+HIGH üzerinde fail)"
                             sh '''
                                 docker run --rm \
@@ -325,14 +348,14 @@ pipeline {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
                     // Base image'ı bir kez pull et — paralel build'ler aynı katmanı paylaşır.
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         sh 'docker pull node:20-alpine'
                     }
                     parallel IMAGES.split(',').collectEntries { target ->
-                        ["${target}": {
-                            node('built-in') {
+                        [(target): {
+                            node(env.BUILTIN) {
                                 ws("workspace/${env.JOB_NAME}-build-${target}-${env.BUILD_NUMBER}") {
-                                    unstash 'workspace'
+                                    unstash "${WORKSPACE_STASH}"
                                     def imageName = "${GHCR_REGISTRY}/${GHCR_NAMESPACE}/${IMAGE_PREFIX}-${target}"
                                     def buildTag  = isPR() ? "pr-${env.CHANGE_ID}-${env.BUILD_NUMBER}" : "${IMMUTABLE_TAG}"
                                     def stableTag = isPR() ? "pr-${env.CHANGE_ID}"                    : "${VERSION}"
@@ -368,8 +391,8 @@ pipeline {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
                     parallel IMAGES.split(',').collectEntries { target ->
-                        ["${target}": {
-                            node('built-in') {
+                        [(target): {
+                            node(env.BUILTIN) {
                                 ws("workspace/${env.JOB_NAME}-trivy-img-${target}-${env.BUILD_NUMBER}") {
                                     def stableTag = isPR() ? "pr-${env.CHANGE_ID}" : "${VERSION}"
                                     def imageName = "${GHCR_REGISTRY}/${GHCR_NAMESPACE}/${IMAGE_PREFIX}-${target}:${stableTag}"
@@ -407,7 +430,7 @@ pipeline {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
                     // Tek seferlik login
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         withCredentials([usernamePassword(
                             credentialsId: 'github-ghcr-assetart',
                             usernameVariable: 'GHCR_USER',
@@ -418,8 +441,8 @@ pipeline {
                     }
                     // Sonra paralel push
                     parallel IMAGES.split(',').collectEntries { target ->
-                        ["${target}": {
-                            node('built-in') {
+                        [(target): {
+                            node(env.BUILTIN) {
                                 ws("workspace/${env.JOB_NAME}-push-${target}-${env.BUILD_NUMBER}") {
                                     def imageName = "${GHCR_REGISTRY}/${GHCR_NAMESPACE}/${IMAGE_PREFIX}-${target}"
                                     echo "[PUSH] ${imageName}:${IMMUTABLE_TAG} + :${VERSION}"
@@ -447,9 +470,9 @@ pipeline {
             steps {
                 script {
                     echo "Build context: ${isPR() ? 'PR #' + env.CHANGE_ID : 'main'}"
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         ws("workspace/${env.JOB_NAME}-deploy-${env.BUILD_NUMBER}") {
-                            unstash 'workspace'
+                            unstash "${WORKSPACE_STASH}"
                             echo "[BAŞLA] Production deploy — TAG=${IMMUTABLE_TAG}"
                             withCredentials([file(credentialsId: 'assetart-env-prod', variable: 'ENV_FILE')]) {
                                 sh """
@@ -467,8 +490,17 @@ pipeline {
                                       -p ${STACK_NAME} \\
                                       pull web migrator
 
-                                    # Migrator + web + bağımlılıklarını yeniden kaldır
-                                    # (postgres/redis zaten healthy ise dokunulmaz)
+                                    # Migrator oneshot: önce eski exited container'ı kaldır
+                                    # ki up -d yeni image'la sıfırdan kaldırsın (exited
+                                    # container'ı compose her seferinde recreate etmez).
+                                    docker compose \\
+                                      --env-file .env.production \\
+                                      -f ${COMPOSE_FILE} \\
+                                      -p ${STACK_NAME} \\
+                                      rm -fsv migrator || true
+
+                                    # Stack'i kaldır: postgres/redis healthy ise dokunulmaz,
+                                    # migrator + web yeni image'la recreate.
                                     docker compose \\
                                       --env-file .env.production \\
                                       -f ${COMPOSE_FILE} \\
@@ -496,27 +528,47 @@ pipeline {
             when { branch 'main' }
             steps {
                 script {
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         ws("workspace/${env.JOB_NAME}-smoke-${env.BUILD_NUMBER}") {
                             echo "[BAŞLA] Smoke test — post-deploy health probe"
                             sh '''
                                 set -e
-                                echo "--> Compose convergence wait (max 60s)"
+
+                                echo "--> Migrator bekle: önce çalışıyor olabilir, sonra exit 0 bekliyoruz (max 90s)"
+                                MIG_OK=0
+                                for i in $(seq 1 18); do
+                                  STATE=$(docker inspect -f '{{.State.Status}}' assetnova-migrator 2>/dev/null || echo "missing")
+                                  EXIT=$(docker inspect -f '{{.State.ExitCode}}' assetnova-migrator 2>/dev/null || echo "?")
+                                  echo "  tick $i: migrator state=${STATE} exit=${EXIT}"
+                                  if [ "$STATE" = "exited" ] && [ "$EXIT" = "0" ]; then
+                                    MIG_OK=1; echo "Migrator başarıyla bitti (exit 0)."; break
+                                  fi
+                                  if [ "$STATE" = "exited" ] && [ "$EXIT" != "0" ]; then
+                                    echo "Migrator non-zero exit (${EXIT}) — fail"
+                                    docker logs assetnova-migrator --tail 100 || true
+                                    exit 1
+                                  fi
+                                  sleep 5
+                                done
+                                if [ "$MIG_OK" != "1" ]; then
+                                  echo "Migrator 90s içinde bitmedi — fail"
+                                  docker logs assetnova-migrator --tail 100 || true
+                                  exit 1
+                                fi
+
+                                echo "--> Web convergence wait (max 60s)"
                                 for i in $(seq 1 12); do
                                   WEB_STATE=$(docker inspect -f '{{.State.Health.Status}}' assetnova-web 2>/dev/null || echo "starting")
                                   echo "  tick $i: web=${WEB_STATE}"
                                   if [ "$WEB_STATE" = "healthy" ]; then
-                                    echo "Web service healthy."
-                                    break
+                                    echo "Web servisi healthy."; break
                                   fi
                                   sleep 5
                                 done
-
-                                echo "--> Migrator exit kodu kontrolü (0 bekleniyor)"
-                                MIG_EXIT=$(docker inspect -f '{{.State.ExitCode}}' assetnova-migrator 2>/dev/null || echo "missing")
-                                echo "  migrator exit=${MIG_EXIT}"
-                                if [ "$MIG_EXIT" != "0" ] && [ "$MIG_EXIT" != "missing" ]; then
-                                  echo "Migrator non-zero exit — fail"; exit 1
+                                if [ "$WEB_STATE" != "healthy" ]; then
+                                  echo "Web 60s içinde healthy olmadı — fail"
+                                  docker logs assetnova-web --tail 100 || true
+                                  exit 1
                                 fi
 
                                 echo "--> Internal health (network üzerinden geçici curl)"
@@ -535,7 +587,7 @@ pipeline {
                                   && echo "  public OK" \\
                                   || echo "  public skip (Caddy profile aktif değil veya DNS hazır değil)"
                             '''
-                            echo "[BİTİŞ] Smoke test başarılı — web healthy, migrator exit=0, /api/health 200"
+                            echo "[BİTİŞ] Smoke test başarılı — migrator exit=0, web healthy, /api/health 200"
                         }
                     }
                 }
@@ -551,15 +603,15 @@ pipeline {
     post {
         always {
             // Docker logout (her zaman çalışır)
-            node('built-in') {
+            node(env.BUILTIN) {
                 sh 'docker logout ghcr.io || true'
             }
             // Pipeline tamamlandıktan sonra workspace cleanup.
-            // Pattern: workspace/assetart/main-{stage}-{target}-{BUILD_NUMBER}
+            // Pattern: workspace/${JOB}-{stage}-{target}-{BUILD_NUMBER}
             // try/catch ile sarılı → cleanup hatası pipeline'ı fail etmez.
             script {
                 try {
-                    node('built-in') {
+                    node(env.BUILTIN) {
                         echo "[CLEANUP] Build #${env.BUILD_NUMBER} workspace cleanup başlıyor"
                         sh '''
                             BEFORE=$(df -h / | tail -1 | awk '{print $5}')
