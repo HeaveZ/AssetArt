@@ -12,7 +12,23 @@ import "server-only";
  * Returns `{ headers, rows }`. `rows[i]` is keyed by header.
  * Empty lines are skipped.
  */
-export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
+// Handles a single character while inside quoted state.
+// Returns the next state. `consumedExtra` signals a peek-ahead consumption
+// (escaped `""`), so the outer loop must advance the index by one more.
+type QuotedStep = { field: string; inQuotes: boolean; consumedExtra: boolean };
+function stepInsideQuotes(ch: string, next: string | undefined, field: string): QuotedStep {
+  if (ch !== '"') return { field: field + ch, inQuotes: true, consumedExtra: false };
+  if (next === '"') return { field: field + '"', inQuotes: true, consumedExtra: true };
+  return { field, inQuotes: false, consumedExtra: false };
+}
+
+function pushLine(lines: string[][], current: string[], field: string): string[] {
+  current.push(field);
+  if (current.some((f) => f.length > 0)) lines.push(current);
+  return [];
+}
+
+function tokenizeCsv(text: string): string[][] {
   const cleaned = text.replace(/^﻿/, "");
   const lines: string[][] = [];
   let current: string[] = [];
@@ -22,42 +38,30 @@ export function parseCsv(text: string): { headers: string[]; rows: Record<string
   for (let i = 0; i < cleaned.length; i++) {
     const ch = cleaned[i]!;
     if (inQuotes) {
-      if (ch === '"') {
-        if (cleaned[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += ch;
-      }
+      const step = stepInsideQuotes(ch, cleaned[i + 1], field);
+      field = step.field;
+      inQuotes = step.inQuotes;
+      if (step.consumedExtra) i++;
       continue;
     }
-    if (ch === '"') {
-      inQuotes = true;
-      continue;
-    }
-    if (ch === ",") {
-      current.push(field);
-      field = "";
-      continue;
-    }
+    if (ch === '"') { inQuotes = true; continue; }
+    if (ch === ",") { current.push(field); field = ""; continue; }
     if (ch === "\r") continue;
     if (ch === "\n") {
-      current.push(field);
+      current = pushLine(lines, current, field);
       field = "";
-      if (current.some((f) => f.length > 0)) lines.push(current);
-      current = [];
       continue;
     }
     field += ch;
   }
   if (field.length > 0 || current.length > 0) {
-    current.push(field);
-    if (current.some((f) => f.length > 0)) lines.push(current);
+    pushLine(lines, current, field);
   }
+  return lines;
+}
 
+export function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
+  const lines = tokenizeCsv(text);
   if (lines.length === 0) return { headers: [], rows: [] };
 
   const headers = lines[0]!.map((h) => h.trim());

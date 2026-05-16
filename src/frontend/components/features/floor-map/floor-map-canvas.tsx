@@ -83,16 +83,7 @@ export function FloorMapCanvas({ sites, initialSiteId, assets }: Props) {
   const unplacedAssets = useMemo(() => {
     const placed = new Set(Object.keys(pins));
     const q = search.trim().toLowerCase();
-    return assets
-      .filter((a) => !placed.has(a.id))
-      .filter((a) => {
-        if (!q) return true;
-        return (
-          a.tag.toLowerCase().includes(q) ||
-          a.name.toLowerCase().includes(q) ||
-          (a.assignee?.name ?? "").toLowerCase().includes(q)
-        );
-      });
+    return assets.filter((a) => !placed.has(a.id) && matchesSearch(a, q));
   }, [assets, pins, search]);
 
   const placeAtCenter = useCallback((assetId: string) => {
@@ -309,67 +300,20 @@ export function FloorMapCanvas({ sites, initialSiteId, assets }: Props) {
           <FloorBackground zoom={zoom} />
 
           {showPlaced
-            ? placedAssets.map((a) => {
-                const pos = pins[a.id];
-                if (!pos) return null;
-                const meta = ASSET_STATUS_META[a.status];
-                const isActive = activeAssetId === a.id;
-                return (
-                  <motion.button
-                    key={a.id}
-                    layout
-                    type="button"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    exit={{ scale: 0, opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 320, damping: 24 }}
-                    onPointerDown={(e) => handlePointerDown(e, a.id)}
-                    onMouseEnter={() => setHoveredId(a.id)}
-                    onMouseLeave={() => setHoveredId((id) => (id === a.id ? null : id))}
-                    onClick={() => setActiveAssetId(a.id)}
-                    style={{
-                      left: `${pos.x}%`,
-                      top: `${pos.y}%`,
-                    }}
-                    className={cn(
-                      "group absolute -translate-x-1/2 -translate-y-1/2 outline-none",
-                      draggingId === a.id ? "cursor-grabbing" : "cursor-grab",
-                    )}
-                    aria-label={`${a.tag} · ${a.name}`}
-                  >
-                    <span
-                      className={cn(
-                        "relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-white shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition-transform",
-                        meta.bg,
-                        isActive ? "scale-110 ring-2 ring-brand-orange-500" : "group-hover:scale-110",
-                      )}
-                    >
-                      <span className={cn("text-[10px] font-semibold", meta.fg)}>
-                        {a.tag.slice(-2)}
-                      </span>
-                      <span
-                        className={cn(
-                          "absolute -bottom-0.5 right-0 h-2 w-2 rounded-full ring-2 ring-white",
-                          meta.dot,
-                        )}
-                      />
-                    </span>
-                    <AnimatePresence>
-                      {hoveredId === a.id && draggingId !== a.id ? (
-                        <motion.span
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: 4 }}
-                          transition={{ duration: 0.12 }}
-                          className="bg-text text-surface pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10.5px] font-medium shadow-md"
-                        >
-                          {a.tag} · {a.name}
-                        </motion.span>
-                      ) : null}
-                    </AnimatePresence>
-                  </motion.button>
-                );
-              })
+            ? placedAssets.map((a) => (
+                <PlacedPin
+                  key={a.id}
+                  asset={a}
+                  position={pins[a.id]}
+                  isActive={activeAssetId === a.id}
+                  isHovered={hoveredId === a.id}
+                  isDragging={draggingId === a.id}
+                  onPointerDown={(e) => handlePointerDown(e, a.id)}
+                  onMouseEnter={() => setHoveredId(a.id)}
+                  onMouseLeave={() => setHoveredId((id) => (id === a.id ? null : id))}
+                  onClick={() => setActiveAssetId(a.id)}
+                />
+              ))
             : null}
         </div>
       </div>
@@ -490,6 +434,90 @@ function FloorBackground({ zoom }: { zoom: number }) {
         <rect x="6%" y="44%" width="88%" height="48%" fill="none" stroke="currentColor" strokeWidth={1.5} rx={4} />
       </g>
     </svg>
+  );
+}
+
+function matchesSearch(a: FloorMapAsset, q: string): boolean {
+  if (!q) return true;
+  if (a.tag.toLowerCase().includes(q)) return true;
+  if (a.name.toLowerCase().includes(q)) return true;
+  return (a.assignee?.name ?? "").toLowerCase().includes(q);
+}
+
+interface PlacedPinProps {
+  asset: FloorMapAsset;
+  position: PinPosition | undefined;
+  isActive: boolean;
+  isHovered: boolean;
+  isDragging: boolean;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
+  onClick: () => void;
+}
+
+function PlacedPin({
+  asset,
+  position,
+  isActive,
+  isHovered,
+  isDragging,
+  onPointerDown,
+  onMouseEnter,
+  onMouseLeave,
+  onClick,
+}: PlacedPinProps) {
+  if (!position) return null;
+  const meta = ASSET_STATUS_META[asset.status];
+  const showTooltip = isHovered && !isDragging;
+  return (
+    <motion.button
+      layout
+      type="button"
+      initial={{ scale: 0, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 320, damping: 24 }}
+      onPointerDown={onPointerDown}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={onClick}
+      style={{ left: `${position.x}%`, top: `${position.y}%` }}
+      className={cn(
+        "group absolute -translate-x-1/2 -translate-y-1/2 outline-none",
+        isDragging ? "cursor-grabbing" : "cursor-grab",
+      )}
+      aria-label={`${asset.tag} · ${asset.name}`}
+    >
+      <span
+        className={cn(
+          "relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-white shadow-[0_2px_10px_rgba(0,0,0,0.18)] transition-transform",
+          meta.bg,
+          isActive ? "scale-110 ring-2 ring-brand-orange-500" : "group-hover:scale-110",
+        )}
+      >
+        <span className={cn("text-[10px] font-semibold", meta.fg)}>{asset.tag.slice(-2)}</span>
+        <span
+          className={cn(
+            "absolute -bottom-0.5 right-0 h-2 w-2 rounded-full ring-2 ring-white",
+            meta.dot,
+          )}
+        />
+      </span>
+      <AnimatePresence>
+        {showTooltip ? (
+          <motion.span
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.12 }}
+            className="bg-text text-surface pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded-md px-2 py-1 text-[10.5px] font-medium shadow-md"
+          >
+            {asset.tag} · {asset.name}
+          </motion.span>
+        ) : null}
+      </AnimatePresence>
+    </motion.button>
   );
 }
 

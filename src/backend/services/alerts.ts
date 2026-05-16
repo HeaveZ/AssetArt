@@ -66,174 +66,164 @@ export async function getUnreadAlertCount(workspaceId: string): Promise<number> 
   return prisma.alert.count({ where: { workspaceId, dismissedAt: null, readAt: null } });
 }
 
-/**
- * Idempotent generator. Scans assets, leases, licenses, maintenance and
- * ensures appropriate alerts exist. Returns the number of new alerts created.
- */
-export async function regenerateAllAlerts(workspaceId: string): Promise<number> {
-  const now = new Date();
-  let created = 0;
+// Severity ladder for time-windowed alerts (warranty / lease / license).
+function daysSeverity(days: number): AlertSeverity {
+  if (days <= 14) return "CRITICAL";
+  if (days <= 30) return "WARNING";
+  return "INFO";
+}
 
-  // ── WARRANTY_EXPIRING ──
-  const warrantyEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.WARRANTY_EXPIRING * DAY_MS);
-  const warrantyAssets = await prisma.asset.findMany({
+// Idempotent helper: skip if open alert already exists, otherwise insert.
+async function ensureAlert(params: {
+  workspaceId: string;
+  type: AlertType;
+  resourceType: string;
+  resourceId: string;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+}): Promise<boolean> {
+  const existing = await prisma.alert.findFirst({
     where: {
-      workspaceId,
-      deletedAt: null,
-      warrantyEndsAt: { gte: now, lte: warrantyEnd },
+      workspaceId: params.workspaceId,
+      type: params.type,
+      resourceType: params.resourceType,
+      resourceId: params.resourceId,
+      dismissedAt: null,
     },
+    select: { id: true },
+  });
+  if (existing) return false;
+  await prisma.alert.create({
+    data: {
+      workspaceId: params.workspaceId,
+      type: params.type,
+      severity: params.severity,
+      title: params.title,
+      message: params.message,
+      resourceType: params.resourceType,
+      resourceId: params.resourceId,
+    },
+  });
+  return true;
+}
+
+async function generateWarrantyAlerts(workspaceId: string, now: Date): Promise<number> {
+  const windowEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.WARRANTY_EXPIRING * DAY_MS);
+  const assets = await prisma.asset.findMany({
+    where: { workspaceId, deletedAt: null, warrantyEndsAt: { gte: now, lte: windowEnd } },
     select: { id: true, tag: true, name: true, warrantyEndsAt: true },
   });
-  for (const a of warrantyAssets) {
+  let created = 0;
+  for (const a of assets) {
     if (!a.warrantyEndsAt) continue;
-    const existing = await prisma.alert.findFirst({
-      where: {
-        workspaceId,
-        type: "WARRANTY_EXPIRING",
-        resourceType: "asset",
-        resourceId: a.id,
-        dismissedAt: null,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
     const days = Math.ceil((a.warrantyEndsAt.getTime() - now.getTime()) / DAY_MS);
-    await prisma.alert.create({
-      data: {
-        workspaceId,
-        type: "WARRANTY_EXPIRING",
-        severity: days <= 14 ? "CRITICAL" : days <= 30 ? "WARNING" : "INFO",
-        title: `Warranty ending in ${days}d — ${a.tag}`,
-        message: `${a.name} warranty ends ${a.warrantyEndsAt.toISOString().slice(0, 10)}.`,
-        resourceType: "asset",
-        resourceId: a.id,
-      },
+    const inserted = await ensureAlert({
+      workspaceId,
+      type: "WARRANTY_EXPIRING",
+      resourceType: "asset",
+      resourceId: a.id,
+      severity: daysSeverity(days),
+      title: `Warranty ending in ${days}d — ${a.tag}`,
+      message: `${a.name} warranty ends ${a.warrantyEndsAt.toISOString().slice(0, 10)}.`,
     });
-    created++;
+    if (inserted) created++;
   }
+  return created;
+}
 
-  // ── LEASE_EXPIRING ──
-  const leaseEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.LEASE_EXPIRING * DAY_MS);
-  const expiringLeases = await prisma.lease.findMany({
+async function generateLeaseAlerts(workspaceId: string, now: Date): Promise<number> {
+  const windowEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.LEASE_EXPIRING * DAY_MS);
+  const leases = await prisma.lease.findMany({
     where: {
       asset: { workspaceId, deletedAt: null },
       status: { in: ["ACTIVE", "EXPIRING"] },
-      endDate: { gte: now, lte: leaseEnd },
+      endDate: { gte: now, lte: windowEnd },
     },
     include: { asset: { select: { tag: true, name: true } } },
   });
-  for (const l of expiringLeases) {
+  let created = 0;
+  for (const l of leases) {
     if (l.status === "ACTIVE") {
       await prisma.lease.update({ where: { id: l.id }, data: { status: "EXPIRING" } });
     }
-    const existing = await prisma.alert.findFirst({
-      where: {
-        workspaceId,
-        type: "LEASE_EXPIRING",
-        resourceType: "lease",
-        resourceId: l.id,
-        dismissedAt: null,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
     const days = Math.ceil((l.endDate.getTime() - now.getTime()) / DAY_MS);
-    await prisma.alert.create({
-      data: {
-        workspaceId,
-        type: "LEASE_EXPIRING",
-        severity: days <= 14 ? "CRITICAL" : days <= 30 ? "WARNING" : "INFO",
-        title: `Lease ending in ${days}d — ${l.asset.tag}`,
-        message: `${l.vendor} lease for ${l.asset.name} ends ${l.endDate.toISOString().slice(0, 10)}.`,
-        resourceType: "lease",
-        resourceId: l.id,
-      },
+    const inserted = await ensureAlert({
+      workspaceId,
+      type: "LEASE_EXPIRING",
+      resourceType: "lease",
+      resourceId: l.id,
+      severity: daysSeverity(days),
+      title: `Lease ending in ${days}d — ${l.asset.tag}`,
+      message: `${l.vendor} lease for ${l.asset.name} ends ${l.endDate.toISOString().slice(0, 10)}.`,
     });
-    created++;
+    if (inserted) created++;
   }
+  return created;
+}
 
-  // ── MAINTENANCE_DUE ──
-  const maintEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.MAINTENANCE_DUE * DAY_MS);
-  const dueMaintenance = await prisma.maintenanceRecord.findMany({
+async function generateMaintenanceAlerts(workspaceId: string, now: Date): Promise<number> {
+  const windowEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.MAINTENANCE_DUE * DAY_MS);
+  const records = await prisma.maintenanceRecord.findMany({
     where: {
       asset: { workspaceId, deletedAt: null },
       status: { in: ["SCHEDULED", "OVERDUE"] },
-      scheduledAt: { lte: maintEnd },
+      scheduledAt: { lte: windowEnd },
     },
     include: { asset: { select: { tag: true, name: true } } },
   });
-  for (const m of dueMaintenance) {
+  let created = 0;
+  for (const m of records) {
     if (!m.scheduledAt) continue;
-    const existing = await prisma.alert.findFirst({
-      where: {
-        workspaceId,
-        type: "MAINTENANCE_DUE",
-        resourceType: "maintenance",
-        resourceId: m.id,
-        dismissedAt: null,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
     const isOverdue = m.status === "OVERDUE";
-    await prisma.alert.create({
-      data: {
-        workspaceId,
-        type: "MAINTENANCE_DUE",
-        severity: isOverdue ? "CRITICAL" : "WARNING",
-        title: isOverdue
-          ? `Maintenance overdue — ${m.asset.tag}`
-          : `Maintenance due — ${m.asset.tag}`,
-        message: `${m.asset.name} scheduled for ${m.scheduledAt.toISOString().slice(0, 10)}.`,
-        resourceType: "maintenance",
-        resourceId: m.id,
-      },
+    const inserted = await ensureAlert({
+      workspaceId,
+      type: "MAINTENANCE_DUE",
+      resourceType: "maintenance",
+      resourceId: m.id,
+      severity: isOverdue ? "CRITICAL" : "WARNING",
+      title: isOverdue
+        ? `Maintenance overdue — ${m.asset.tag}`
+        : `Maintenance due — ${m.asset.tag}`,
+      message: `${m.asset.name} scheduled for ${m.scheduledAt.toISOString().slice(0, 10)}.`,
     });
-    created++;
+    if (inserted) created++;
   }
+  return created;
+}
 
-  // ── LICENSE_EXPIRING ──
-  const licenseEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.LICENSE_EXPIRING * DAY_MS);
-  const expiringLicenses = await prisma.license.findMany({
+async function generateLicenseAlerts(workspaceId: string, now: Date): Promise<number> {
+  const windowEnd = new Date(now.getTime() + ALERT_WINDOW_DAYS.LICENSE_EXPIRING * DAY_MS);
+  const licenses = await prisma.license.findMany({
     where: {
       workspaceId,
       status: { in: ["ACTIVE", "EXPIRING"] },
-      endDate: { gte: now, lte: licenseEnd },
+      endDate: { gte: now, lte: windowEnd },
     },
   });
-  for (const l of expiringLicenses) {
+  let created = 0;
+  for (const l of licenses) {
     if (!l.endDate) continue;
     if (l.status === "ACTIVE") {
       await prisma.license.update({ where: { id: l.id }, data: { status: "EXPIRING" } });
     }
-    const existing = await prisma.alert.findFirst({
-      where: {
-        workspaceId,
-        type: "LICENSE_EXPIRING",
-        resourceType: "license",
-        resourceId: l.id,
-        dismissedAt: null,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
     const days = Math.ceil((l.endDate.getTime() - now.getTime()) / DAY_MS);
-    await prisma.alert.create({
-      data: {
-        workspaceId,
-        type: "LICENSE_EXPIRING",
-        severity: days <= 14 ? "CRITICAL" : days <= 30 ? "WARNING" : "INFO",
-        title: `License expiring in ${days}d — ${l.name}`,
-        message: `${l.name} expires ${l.endDate.toISOString().slice(0, 10)}.`,
-        resourceType: "license",
-        resourceId: l.id,
-      },
+    const inserted = await ensureAlert({
+      workspaceId,
+      type: "LICENSE_EXPIRING",
+      resourceType: "license",
+      resourceId: l.id,
+      severity: daysSeverity(days),
+      title: `License expiring in ${days}d — ${l.name}`,
+      message: `${l.name} expires ${l.endDate.toISOString().slice(0, 10)}.`,
     });
-    created++;
+    if (inserted) created++;
   }
+  return created;
+}
 
-  // ── ASSET_OVERDUE ──
-  const overdueCheckouts = await prisma.checkout.findMany({
+async function generateOverdueCheckoutAlerts(workspaceId: string, now: Date): Promise<number> {
+  const checkouts = await prisma.checkout.findMany({
     where: {
       asset: { workspaceId, deletedAt: null },
       returnedAt: null,
@@ -241,33 +231,36 @@ export async function regenerateAllAlerts(workspaceId: string): Promise<number> 
     },
     include: { asset: { select: { id: true, tag: true, name: true } } },
   });
-  for (const c of overdueCheckouts) {
+  let created = 0;
+  for (const c of checkouts) {
     if (!c.dueAt) continue;
-    const existing = await prisma.alert.findFirst({
-      where: {
-        workspaceId,
-        type: "ASSET_OVERDUE",
-        resourceType: "asset",
-        resourceId: c.asset.id,
-        dismissedAt: null,
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
     const days = Math.ceil((now.getTime() - c.dueAt.getTime()) / DAY_MS);
-    await prisma.alert.create({
-      data: {
-        workspaceId,
-        type: "ASSET_OVERDUE",
-        severity: days >= 7 ? "CRITICAL" : "WARNING",
-        title: `Asset overdue ${days}d — ${c.asset.tag}`,
-        message: `${c.asset.name} due ${c.dueAt.toISOString().slice(0, 10)}, not returned.`,
-        resourceType: "asset",
-        resourceId: c.asset.id,
-      },
+    const inserted = await ensureAlert({
+      workspaceId,
+      type: "ASSET_OVERDUE",
+      resourceType: "asset",
+      resourceId: c.asset.id,
+      severity: days >= 7 ? "CRITICAL" : "WARNING",
+      title: `Asset overdue ${days}d — ${c.asset.tag}`,
+      message: `${c.asset.name} due ${c.dueAt.toISOString().slice(0, 10)}, not returned.`,
     });
-    created++;
+    if (inserted) created++;
   }
-
   return created;
+}
+
+/**
+ * Idempotent generator. Scans assets, leases, licenses, maintenance and
+ * ensures appropriate alerts exist. Returns the number of new alerts created.
+ */
+export async function regenerateAllAlerts(workspaceId: string): Promise<number> {
+  const now = new Date();
+  const counts = await Promise.all([
+    generateWarrantyAlerts(workspaceId, now),
+    generateLeaseAlerts(workspaceId, now),
+    generateMaintenanceAlerts(workspaceId, now),
+    generateLicenseAlerts(workspaceId, now),
+    generateOverdueCheckoutAlerts(workspaceId, now),
+  ]);
+  return counts.reduce((sum, n) => sum + n, 0);
 }

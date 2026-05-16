@@ -240,6 +240,102 @@ export async function redirectToNewAsset() {
   redirect("/assets/new");
 }
 
+type CsvSiteEntry = { id: string; name: string; locations: Array<{ id: string; name: string }> };
+type CsvImportRowParams = {
+  raw: Record<string, string | undefined>;
+  lineNo: number;
+  tx: Prisma.TransactionClient;
+  workspaceId: string;
+  siteByName: Map<string, CsvSiteEntry>;
+  categoryByName: Map<string, { id: string; name: string }>;
+  userByEmail: Map<string, { id: string; email: string }>;
+};
+type CsvImportRowResult =
+  | { ok: true; asset: { id: string; tag: string; name: string } }
+  | { ok: false; error: { row: number; tag?: string; reason: string } };
+
+async function importCsvRow(p: CsvImportRowParams): Promise<CsvImportRowResult> {
+  const parsed = csvImportRowSchema.safeParse({
+    ...p.raw,
+    purchasePrice: p.raw.purchasePrice ? Number(p.raw.purchasePrice) : undefined,
+    memoryGB: p.raw.memoryGB ? Number(p.raw.memoryGB) : undefined,
+    storageGB: p.raw.storageGB ? Number(p.raw.storageGB) : undefined,
+    displayInches: p.raw.displayInches ? Number(p.raw.displayInches) : undefined,
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return {
+      ok: false,
+      error: {
+        row: p.lineNo,
+        tag: p.raw.tag || undefined,
+        reason: `${issue?.path?.join(".") ?? "field"}: ${issue?.message ?? "invalid"}`,
+      },
+    };
+  }
+
+  const row = parsed.data;
+  const site = row.site ? p.siteByName.get(row.site.toLowerCase()) : undefined;
+  const location = site && row.location
+    ? site.locations.find((l) => l.name.toLowerCase() === row.location!.toLowerCase())
+    : undefined;
+  const category = row.category ? p.categoryByName.get(row.category.toLowerCase()) : undefined;
+  const assignee = row.assigneeEmail ? p.userByEmail.get(row.assigneeEmail.toLowerCase()) : undefined;
+
+  const tag = row.tag?.trim() || (await generateNextTag(p.workspaceId, p.tx));
+  const conflict = await p.tx.asset.findFirst({
+    where: { workspaceId: p.workspaceId, tag, deletedAt: null },
+    select: { id: true },
+  });
+  if (conflict) {
+    return { ok: false, error: { row: p.lineNo, tag, reason: `tag ${tag} already exists` } };
+  }
+
+  const purchaseDate = row.purchaseDate ? new Date(row.purchaseDate) : undefined;
+  const warrantyEndsAt = row.warrantyEndsAt ? new Date(row.warrantyEndsAt) : undefined;
+
+  try {
+    const asset = await p.tx.asset.create({
+      data: {
+        workspaceId: p.workspaceId,
+        tag,
+        name: row.name,
+        status: row.status ?? "AVAILABLE",
+        currency: row.currency ?? "USD",
+        ...clean({
+          brand: row.brand,
+          model: row.model,
+          serialNumber: row.serialNumber,
+          categoryId: category?.id,
+          siteId: site?.id,
+          locationId: location?.id,
+          assigneeId: assignee?.id,
+          purchaseDate,
+          purchasePrice: row.purchasePrice,
+          warrantyEndsAt,
+          cpu: row.cpu,
+          memoryGB: row.memoryGB,
+          storageGB: row.storageGB,
+          displayInches: row.displayInches,
+          os: row.os,
+          notes: row.notes,
+        }),
+      },
+      select: { id: true, tag: true, name: true },
+    });
+    return { ok: true, asset };
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        row: p.lineNo,
+        tag,
+        reason: err instanceof Error ? err.message : "insert failed",
+      },
+    };
+  }
+}
+
 export async function bulkImportCsvAction(formData: FormData): Promise<ActionResult<CsvImportSummary>> {
   const session = await requireSession();
   requirePermission(session.role, "asset.import");
@@ -290,89 +386,20 @@ export async function bulkImportCsvAction(formData: FormData): Promise<ActionRes
 
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < rows.length; i++) {
-      const raw = rows[i]!;
-      const lineNo = i + 2; // header is row 1
-
-      const parsed = csvImportRowSchema.safeParse({
-        ...raw,
-        purchasePrice: raw.purchasePrice ? Number(raw.purchasePrice) : undefined,
-        memoryGB: raw.memoryGB ? Number(raw.memoryGB) : undefined,
-        storageGB: raw.storageGB ? Number(raw.storageGB) : undefined,
-        displayInches: raw.displayInches ? Number(raw.displayInches) : undefined,
+      const result = await importCsvRow({
+        raw: rows[i]!,
+        lineNo: i + 2, // header is row 1
+        tx,
+        workspaceId: session.workspaceId,
+        siteByName,
+        categoryByName,
+        userByEmail,
       });
-      if (!parsed.success) {
-        const issue = parsed.error.issues[0];
-        errors.push({
-          row: lineNo,
-          tag: raw.tag || undefined,
-          reason: `${issue?.path?.join(".") ?? "field"}: ${issue?.message ?? "invalid"}`,
-        });
-        continue;
-      }
-
-      const row = parsed.data;
-      const site = row.site ? siteByName.get(row.site.toLowerCase()) : undefined;
-      const location =
-        site && row.location
-          ? site.locations.find((l) => l.name.toLowerCase() === row.location!.toLowerCase())
-          : undefined;
-      const category = row.category
-        ? categoryByName.get(row.category.toLowerCase())
-        : undefined;
-      const assignee = row.assigneeEmail
-        ? userByEmail.get(row.assigneeEmail.toLowerCase())
-        : undefined;
-
-      const tag = row.tag?.trim() || (await generateNextTag(session.workspaceId, tx));
-      const conflict = await tx.asset.findFirst({
-        where: { workspaceId: session.workspaceId, tag, deletedAt: null },
-        select: { id: true },
-      });
-      if (conflict) {
-        errors.push({ row: lineNo, tag, reason: `tag ${tag} already exists` });
-        continue;
-      }
-
-      const purchaseDate = row.purchaseDate ? new Date(row.purchaseDate) : undefined;
-      const warrantyEndsAt = row.warrantyEndsAt ? new Date(row.warrantyEndsAt) : undefined;
-
-      try {
-        const asset = await tx.asset.create({
-          data: {
-            workspaceId: session.workspaceId,
-            tag,
-            name: row.name,
-            status: row.status ?? "AVAILABLE",
-            currency: row.currency ?? "USD",
-            ...clean({
-              brand: row.brand,
-              model: row.model,
-              serialNumber: row.serialNumber,
-              categoryId: category?.id,
-              siteId: site?.id,
-              locationId: location?.id,
-              assigneeId: assignee?.id,
-              purchaseDate,
-              purchasePrice: row.purchasePrice,
-              warrantyEndsAt,
-              cpu: row.cpu,
-              memoryGB: row.memoryGB,
-              storageGB: row.storageGB,
-              displayInches: row.displayInches,
-              os: row.os,
-              notes: row.notes,
-            }),
-          },
-          select: { id: true, tag: true, name: true },
-        });
-        created.push(asset);
+      if (result.ok) {
+        created.push(result.asset);
         imported += 1;
-      } catch (err) {
-        errors.push({
-          row: lineNo,
-          tag,
-          reason: err instanceof Error ? err.message : "insert failed",
-        });
+      } else {
+        errors.push(result.error);
       }
     }
 

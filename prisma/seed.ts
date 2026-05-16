@@ -95,35 +95,105 @@ function pad(n: number, len: number): string {
   return n.toString().padStart(len, "0");
 }
 
+type AssetSpec = {
+  brand: string;
+  model: string;
+  mem: number;
+  storage: number;
+  display: number;
+  cpu: string;
+};
+
+function buildLaptopSpec(brand: string): AssetSpec {
+  return {
+    brand,
+    model: rand(ASSET_MODELS_LAPTOP[brand]!),
+    mem: rand([8, 16, 24, 32, 64]),
+    storage: rand([256, 512, 1000, 2000]),
+    display: rand([13.6, 14, 15.3, 16]),
+    cpu: brand === "Apple"
+      ? rand(["M3", "M3 Pro", "M3 Max"])
+      : rand(["Intel i7", "Intel i9", "Ryzen 7", "Ryzen 9"]),
+  };
+}
+
+function buildPhoneSpec(brand: string): AssetSpec {
+  return {
+    brand,
+    model: rand(ASSET_MODELS_PHONE[brand]!),
+    mem: rand([6, 8, 12]),
+    storage: rand([128, 256, 512]),
+    display: rand([6.1, 6.7]),
+    cpu: "",
+  };
+}
+
+function buildMonitorSpec(brand: string): AssetSpec {
+  return {
+    brand,
+    model: rand(ASSET_MODELS_MONITOR[brand]!),
+    mem: 16,
+    storage: 512,
+    display: rand([27, 32, 34]),
+    cpu: "",
+  };
+}
+
+function buildPeripheralSpec(): AssetSpec {
+  return {
+    brand: rand(["Logitech", "Keychron", "Apple", "Razer"]),
+    model: rand(["MX Master 3S", "Q1 Pro", "Magic Mouse", "DeathAdder V3"]),
+    mem: 16,
+    storage: 512,
+    display: 0,
+    cpu: "",
+  };
+}
+
+function pickOs(catId: string, phoneCatId: string, brand: string): string {
+  if (catId === phoneCatId) return brand === "Apple" ? "iOS 17" : "Android 14";
+  return brand === "Apple" ? "macOS 14" : "Windows 11 Pro";
+}
+
+async function wipeAll(): Promise<void> {
+  // Order matters: children before parents. Each deleteMany is best-effort.
+  const tables = [
+    prisma.commandLog,
+    prisma.auditLog,
+    prisma.alert,
+    prisma.floorPlanPin,
+    prisma.floorPlan,
+    prisma.savedView,
+    prisma.customFieldDefinition,
+    prisma.maintenanceRecord,
+    prisma.checkout,
+    prisma.lease,
+    prisma.license,
+    prisma.assetPhoto,
+    prisma.asset,
+    prisma.category,
+    prisma.person,
+    prisma.customer,
+    prisma.department,
+    prisma.location,
+    prisma.site,
+    prisma.session,
+    prisma.account,
+    prisma.verificationToken,
+    prisma.user,
+    prisma.workspace,
+  ];
+  for (const t of tables) {
+    await (t as { deleteMany: () => Promise<unknown> }).deleteMany().catch(() => undefined);
+  }
+}
+
 async function main() {
   console.info("🌱 Seeding Evam Assets…");
 
   // ───────── Reset (idempotent) ─────────
   console.info("  ↻ wiping existing data");
-  await prisma.commandLog.deleteMany().catch(() => undefined);
-  await prisma.auditLog.deleteMany().catch(() => undefined);
-  await prisma.alert.deleteMany().catch(() => undefined);
-  await prisma.floorPlanPin.deleteMany().catch(() => undefined);
-  await prisma.floorPlan.deleteMany().catch(() => undefined);
-  await prisma.savedView.deleteMany().catch(() => undefined);
-  await prisma.customFieldDefinition.deleteMany().catch(() => undefined);
-  await prisma.maintenanceRecord.deleteMany().catch(() => undefined);
-  await prisma.checkout.deleteMany().catch(() => undefined);
-  await prisma.lease.deleteMany().catch(() => undefined);
-  await prisma.license.deleteMany().catch(() => undefined);
-  await prisma.assetPhoto.deleteMany().catch(() => undefined);
-  await prisma.asset.deleteMany().catch(() => undefined);
-  await prisma.category.deleteMany().catch(() => undefined);
-  await prisma.person.deleteMany().catch(() => undefined);
-  await prisma.customer.deleteMany().catch(() => undefined);
-  await prisma.department.deleteMany().catch(() => undefined);
-  await prisma.location.deleteMany().catch(() => undefined);
-  await prisma.site.deleteMany().catch(() => undefined);
-  await prisma.session.deleteMany().catch(() => undefined);
-  await prisma.account.deleteMany().catch(() => undefined);
-  await prisma.verificationToken.deleteMany().catch(() => undefined);
-  await prisma.user.deleteMany().catch(() => undefined);
-  await prisma.workspace.deleteMany().catch(() => undefined);
+  await wipeAll();
 
   // ───────── Workspace ─────────
   console.info("  ✓ workspace");
@@ -243,32 +313,16 @@ async function main() {
   for (let i = 0; i < 60; i++) {
     const status = statusPlan[i] ?? "AVAILABLE";
     const cat = rand(allCategories);
-    let brand: string;
-    let model: string;
-    let mem = 16;
-    let storage = 512;
-    let display = 0;
-    let cpu = "";
+
+    let spec: AssetSpec;
     if (cat.id === catMac.id || cat.id === catPC.id) {
-      brand = rand(ASSET_BRANDS_LAPTOP);
-      model = rand(ASSET_MODELS_LAPTOP[brand]!);
-      mem = rand([8, 16, 24, 32, 64]);
-      storage = rand([256, 512, 1000, 2000]);
-      display = rand([13.6, 14, 15.3, 16]);
-      cpu = brand === "Apple" ? rand(["M3","M3 Pro","M3 Max"]) : rand(["Intel i7","Intel i9","Ryzen 7","Ryzen 9"]);
+      spec = buildLaptopSpec(rand(ASSET_BRANDS_LAPTOP));
     } else if (cat.id === catPhones.id) {
-      brand = rand(ASSET_BRANDS_PHONE);
-      model = rand(ASSET_MODELS_PHONE[brand]!);
-      mem = rand([6, 8, 12]);
-      storage = rand([128, 256, 512]);
-      display = rand([6.1, 6.7]);
+      spec = buildPhoneSpec(rand(ASSET_BRANDS_PHONE));
     } else if (cat.id === catMonitors.id) {
-      brand = rand(ASSET_BRANDS_MONITOR);
-      model = rand(ASSET_MODELS_MONITOR[brand]!);
-      display = rand([27, 32, 34]);
+      spec = buildMonitorSpec(rand(ASSET_BRANDS_MONITOR));
     } else {
-      brand = rand(["Logitech","Keychron","Apple","Razer"]);
-      model = rand(["MX Master 3S","Q1 Pro","Magic Mouse","DeathAdder V3"]);
+      spec = buildPeripheralSpec();
     }
 
     const site = rand(sites);
@@ -276,17 +330,19 @@ async function main() {
     const location = siteLocs.length > 0 ? rand(siteLocs) : null;
     const assignee = status === "CHECKED_OUT" ? rand(users) : null;
     const purchaseDate = dateAdd(now, -rand([60, 120, 240, 365, 540, 720, 900]));
-    const purchasePrice = brand === "Apple" ? rand([1899, 2399, 3199, 3799]) : rand([899, 1299, 1799, 2299]);
+    const purchasePrice = spec.brand === "Apple"
+      ? rand([1899, 2399, 3199, 3799])
+      : rand([899, 1299, 1799, 2299]);
     const warrantyEndsAt = dateAdd(purchaseDate, 365 * rand([1, 2, 3]));
 
     const asset = await prisma.asset.create({
       data: {
         workspaceId: workspace.id,
         tag: `E${pad(1400 + i, 4)}`,
-        name: `${brand} ${model}`,
-        brand,
-        model,
-        serialNumber: `${brand.slice(0,3).toUpperCase()}-${pad(100000 + i, 7)}`,
+        name: `${spec.brand} ${spec.model}`,
+        brand: spec.brand,
+        model: spec.model,
+        serialNumber: `${spec.brand.slice(0, 3).toUpperCase()}-${pad(100000 + i, 7)}`,
         categoryId: cat.id,
         siteId: site.id,
         locationId: location?.id ?? null,
@@ -295,11 +351,11 @@ async function main() {
         purchaseDate,
         purchasePrice,
         warrantyEndsAt,
-        cpu: cpu || null,
-        memoryGB: mem,
-        storageGB: storage,
-        displayInches: display || null,
-        os: cat.id === catPhones.id ? (brand === "Apple" ? "iOS 17" : "Android 14") : brand === "Apple" ? "macOS 14" : "Windows 11 Pro",
+        cpu: spec.cpu || null,
+        memoryGB: spec.mem,
+        storageGB: spec.storage,
+        displayInches: spec.display || null,
+        os: pickOs(cat.id, catPhones.id, spec.brand),
         notes: i % 7 === 0 ? "Refurbished unit. Battery health check scheduled." : null,
       },
     });

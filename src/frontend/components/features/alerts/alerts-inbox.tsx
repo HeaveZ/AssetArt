@@ -185,82 +185,111 @@ export function AlertsInbox({ rows, total, unreadCount }: Props) {
               </button>
             </div>
             <ul className="divide-y divide-border-subtle">
-              {rows.map((alert, i) => {
-                const TypeIcon = TYPE_ICON[alert.type];
-                const sev = ALERT_SEVERITY_META[alert.severity];
-                const isUnread = !alert.readAt;
-                const checked = selected.has(alert.id);
-                const link = alert.resourceType === "asset" && alert.resourceId
-                  ? `/assets/${alert.resourceId}`
-                  : alert.resourceType === "lease"
-                    ? `/leases`
-                    : alert.resourceType === "maintenance"
-                      ? `/maintenance`
-                      : alert.resourceType === "license"
-                        ? `/licenses`
-                        : null;
-
-                return (
-                  <motion.li
-                    key={alert.id}
-                    initial={{ opacity: 0, y: 2 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.16, delay: Math.min(i, 12) * 0.012 }}
-                    className={cn("transition-colors", isUnread ? "bg-brand-orange-500/[0.03]" : "")}
-                  >
-                    <div className="flex items-start gap-3 px-3 py-3">
-                      <Checkbox checked={checked} onCheckedChange={() => toggle(alert.id)} className="mt-1" />
-                      <div className={cn("mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md", sev.bg, sev.fg)}>
-                        <TypeIcon className="h-3.5 w-3.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-2">
-                          <p className={cn("text-text text-[13px] truncate", isUnread && "font-semibold")}>{alert.title}</p>
-                          <span className={cn("rounded-full px-1.5 py-px text-[10px] font-medium", sev.bg, sev.fg)}>
-                            {sev.label}
-                          </span>
-                          <span className="text-text-subtle text-[10.5px]">
-                            · {ALERT_TYPE_META[alert.type].label}
-                          </span>
-                        </div>
-                        <p className="text-text-muted mt-0.5 text-[12px] leading-relaxed">{alert.message}</p>
-                        <div className="text-text-subtle mt-1 flex items-center gap-3 text-[11px]">
-                          <span>{timeAgo(alert.createdAt)}</span>
-                          {link ? (
-                            <Link href={link} className="hover:text-text">
-                              Open →
-                            </Link>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={pending}
-                          onClick={() => runMarkRead(alert.id, isUnread)}
-                          title={isUnread ? "Mark read" : "Mark unread"}
-                        >
-                          <Check className={cn("h-3.5 w-3.5", !isUnread && "opacity-40")} />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={pending}
-                          onClick={() => runDismiss([alert.id])}
-                          title="Dismiss"
-                        >
-                          <BellOff className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </motion.li>
-                );
-              })}
+              {rows.map((alert, i) => (
+                <AlertListItem
+                  key={alert.id}
+                  alert={alert}
+                  index={i}
+                  checked={selected.has(alert.id)}
+                  pending={pending}
+                  onToggle={() => toggle(alert.id)}
+                  onMarkRead={(unread) => runMarkRead(alert.id, unread)}
+                  onDismiss={() => runDismiss([alert.id])}
+                />
+              ))}
             </ul>
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function resourceLink(resourceType: string | null, resourceId: string | null): string | null {
+  if (resourceType === "asset" && resourceId) return `/assets/${resourceId}`;
+  if (resourceType === "lease") return "/leases";
+  if (resourceType === "maintenance") return "/maintenance";
+  if (resourceType === "license") return "/licenses";
+  return null;
+}
+
+interface AlertListItemProps {
+  alert: AlertRow;
+  index: number;
+  checked: boolean;
+  pending: boolean;
+  onToggle: () => void;
+  onMarkRead: (isUnread: boolean) => void;
+  onDismiss: () => void;
+}
+
+function AlertListItem({
+  alert,
+  index,
+  checked,
+  pending,
+  onToggle,
+  onMarkRead,
+  onDismiss,
+}: AlertListItemProps) {
+  const TypeIcon = TYPE_ICON[alert.type];
+  const sev = ALERT_SEVERITY_META[alert.severity];
+  const isUnread = !alert.readAt;
+  const link = resourceLink(alert.resourceType, alert.resourceId);
+
+  return (
+    <motion.li
+      initial={{ opacity: 0, y: 2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.16, delay: Math.min(index, 12) * 0.012 }}
+      className={cn("transition-colors", isUnread ? "bg-brand-orange-500/[0.03]" : "")}
+    >
+      <div className="flex items-start gap-3 px-3 py-3">
+        <Checkbox checked={checked} onCheckedChange={onToggle} className="mt-1" />
+        <div className={cn("mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md", sev.bg, sev.fg)}>
+          <TypeIcon className="h-3.5 w-3.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <p className={cn("text-text text-[13px] truncate", isUnread && "font-semibold")}>{alert.title}</p>
+            <span className={cn("rounded-full px-1.5 py-px text-[10px] font-medium", sev.bg, sev.fg)}>
+              {sev.label}
+            </span>
+            <span className="text-text-subtle text-[10.5px]">
+              · {ALERT_TYPE_META[alert.type].label}
+            </span>
+          </div>
+          <p className="text-text-muted mt-0.5 text-[12px] leading-relaxed">{alert.message}</p>
+          <div className="text-text-subtle mt-1 flex items-center gap-3 text-[11px]">
+            <span>{timeAgo(alert.createdAt)}</span>
+            {link ? (
+              <Link href={link} className="hover:text-text">
+                Open →
+              </Link>
+            ) : null}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={() => onMarkRead(isUnread)}
+            title={isUnread ? "Mark read" : "Mark unread"}
+          >
+            <Check className={cn("h-3.5 w-3.5", !isUnread && "opacity-40")} />
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={pending}
+            onClick={onDismiss}
+            title="Dismiss"
+          >
+            <BellOff className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </motion.li>
   );
 }

@@ -72,24 +72,41 @@ export function WeeklyDiffWidget({ weekDiff, trends }: Props) {
   );
 }
 
+type Direction = "up" | "down" | "flat";
+
+function computePct(current: number, previous: number, delta: number): number {
+  if (previous !== 0) return Math.round((delta / previous) * 100);
+  return current > 0 ? 100 : 0;
+}
+
+function computeDirection(delta: number): Direction {
+  if (delta === 0) return "flat";
+  return delta > 0 ? "up" : "down";
+}
+
+function pickToneClass(direction: Direction, isGood: boolean): string {
+  if (direction === "flat") return "text-text-subtle";
+  return isGood ? "text-success-fg" : "text-warning-fg";
+}
+
+function DirectionArrow({ direction }: { direction: Direction }) {
+  if (direction === "up") return <ArrowUp className="h-3 w-3" />;
+  if (direction === "down") return <ArrowDown className="h-3 w-3" />;
+  return <ArrowRight className="h-3 w-3" />;
+}
+
+function formatPctLabel(direction: Direction, pct: number): string {
+  if (direction === "flat") return "—";
+  return `${pct > 0 ? "+" : ""}${pct}%`;
+}
+
 function DiffItem({ row, index }: { row: DiffRow; index: number }) {
   const Icon = row.icon;
   const delta = row.current - row.previous;
-  const pct =
-    row.previous === 0
-      ? row.current > 0
-        ? 100
-        : 0
-      : Math.round((delta / row.previous) * 100);
-  const direction = delta === 0 ? "flat" : delta > 0 ? "up" : "down";
+  const pct = computePct(row.current, row.previous, delta);
+  const direction = computeDirection(delta);
   const isGood = row.positiveIsGood ? delta >= 0 : delta <= 0;
-
-  const toneClass =
-    direction === "flat"
-      ? "text-text-subtle"
-      : isGood
-        ? "text-success-fg"
-        : "text-warning-fg";
+  const toneClass = pickToneClass(direction, isGood);
 
   return (
     <motion.li
@@ -109,14 +126,8 @@ function DiffItem({ row, index }: { row: DiffRow; index: number }) {
       </div>
       <div className={cn("flex flex-col items-end gap-0.5 text-[11px] font-medium tabular-nums", toneClass)}>
         <span className="inline-flex items-center gap-0.5">
-          {direction === "up" ? (
-            <ArrowUp className="h-3 w-3" />
-          ) : direction === "down" ? (
-            <ArrowDown className="h-3 w-3" />
-          ) : (
-            <ArrowRight className="h-3 w-3" />
-          )}
-          {direction === "flat" ? "—" : `${pct > 0 ? "+" : ""}${pct}%`}
+          <DirectionArrow direction={direction} />
+          {formatPctLabel(direction, pct)}
         </span>
         <Sparkline
           values={row.trend}
