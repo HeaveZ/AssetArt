@@ -104,6 +104,10 @@ pipeline {
         //
         // POSTINSTALL = "prisma generate" → @prisma/client üretilmesini
         // ister; bu yüzden install içinde otomatik tetiklenir.
+        //
+        // DATABASE_URL placeholder: prisma.config.ts env yokken parse hatası
+        // veriyor; bu URL'e bağlanılmaz, sadece config validator'ı tatmin eder.
+        // Gerçek DATABASE_URL Deploy stage'inde .env.production'dan gelir.
         // ------------------------------------------------------
         stage('Install Dependencies') {
             agent none
@@ -119,6 +123,7 @@ pipeline {
                                     echo "[BAŞLA] pnpm install --frozen-lockfile"
                                     corepack enable
                                     corepack prepare pnpm@9 --activate
+                                    export DATABASE_URL='postgresql://build:build@localhost:5432/build'
                                     pnpm install --frozen-lockfile --node-linker=hoisted
                                     echo "[BİTİŞ] Dependencies kurulu (node_modules + prisma client)"
                                 '''
