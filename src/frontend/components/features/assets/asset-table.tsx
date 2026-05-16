@@ -6,20 +6,13 @@ import {
   getCoreRowModel,
   useReactTable,
   type RowSelectionState,
+  type VisibilityState,
 } from "@tanstack/react-table";
 import { motion } from "motion/react";
-import { ArrowUpDown, Columns3, Download, Loader2 } from "lucide-react";
+import { ArrowUpDown, Download, Loader2 } from "lucide-react";
 import { parseAsString, parseAsStringEnum, useQueryStates } from "nuqs";
 import { toast } from "sonner";
 import { Button } from "@/frontend/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/frontend/components/ui/dropdown-menu";
 import { cn } from "@/frontend/lib/utils";
 import { downloadBase64, MIME } from "@/frontend/lib/file";
 import { exportAssetsAction } from "@/backend/actions/assets";
@@ -27,10 +20,12 @@ import type { AssetFiltersInput } from "@/shared/schemas/asset";
 import type { AssetListRow } from "@/backend/services/assets";
 import {
   ASSET_COLUMN_IDS,
-  buildAssetColumns,
-  type AssetColumnMeta,
-} from "./asset-table-columns";
+  DEFAULT_VISIBLE_COLUMNS,
+  type AssetColumnId,
+} from "@/shared/asset-columns";
+import { buildAssetColumns, type AssetColumnMeta } from "./asset-table-columns";
 import { AssetTablePaginator } from "./asset-table-paginator";
+import { ColumnPickerSheet } from "./column-picker-sheet";
 
 interface Props {
   rows: AssetListRow[];
@@ -38,9 +33,25 @@ interface Props {
   page: number;
   pageSize: number;
   currentFilters: AssetFiltersInput;
+  /** Initial column order, loaded server-side from SavedView. */
+  initialOrder?: AssetColumnId[];
+  /** Initial visibility set, loaded server-side from SavedView. */
+  initialVisible?: AssetColumnId[];
 }
 
-export function AssetTable({ rows, total, page, pageSize, currentFilters }: Props) {
+function buildVisibilityMap(visible: Set<AssetColumnId>): VisibilityState {
+  return Object.fromEntries(ASSET_COLUMN_IDS.map((id) => [id, visible.has(id)])) as VisibilityState;
+}
+
+export function AssetTable({
+  rows,
+  total,
+  page,
+  pageSize,
+  currentFilters,
+  initialOrder,
+  initialVisible,
+}: Props) {
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [sorting, setSorting] = useQueryStates({
     sort: parseAsStringEnum(["createdAt", "tag", "name", "purchasePrice", "warrantyEndsAt"])
@@ -49,19 +60,30 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
     order: parseAsStringEnum(["asc", "desc"]).withDefault("desc").withOptions({ shallow: false }),
     q: parseAsString.withDefault(""),
   });
-  const [columnVisibility, setColumnVisibility] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(ASSET_COLUMN_IDS.map((id) => [id, true])),
+
+  const [columnOrder, setColumnOrder] = useState<AssetColumnId[]>(
+    () => initialOrder ?? ([...ASSET_COLUMN_IDS] as AssetColumnId[]),
   );
+  const [visibleSet, setVisibleSet] = useState<Set<AssetColumnId>>(
+    () => new Set<AssetColumnId>(initialVisible ?? DEFAULT_VISIBLE_COLUMNS),
+  );
+
   const [exporting, setExporting] = useState(false);
 
   const columns = useMemo(() => buildAssetColumns(), []);
+  const visibilityMap = useMemo(() => buildVisibilityMap(visibleSet), [visibleSet]);
 
   const table = useReactTable({
     data: rows,
     columns,
-    state: { rowSelection, columnVisibility },
+    state: {
+      rowSelection,
+      columnVisibility: visibilityMap,
+      columnOrder,
+    },
     onRowSelectionChange: setRowSelection,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: () => undefined, // managed via column picker
+    onColumnOrderChange: () => undefined, // managed via column picker
     getCoreRowModel: getCoreRowModel(),
     enableRowSelection: true,
     getRowId: (row) => row.id,
@@ -69,6 +91,8 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const selectedRowCount = Object.values(rowSelection).filter(Boolean).length;
+  const firstRow = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const lastRow = Math.min(total, page * pageSize);
 
   async function handleExport() {
     try {
@@ -77,7 +101,9 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
       downloadBase64(base64, MIME.xlsx, `assetart-${new Date().toISOString().slice(0, 10)}.xlsx`);
       toast.success("Exported", { description: `${rows.length} rows downloaded` });
     } catch (err) {
-      toast.error("Export failed", { description: err instanceof Error ? err.message : "Try again" });
+      toast.error("Export failed", {
+        description: err instanceof Error ? err.message : "Try again",
+      });
     } finally {
       setExporting(false);
     }
@@ -93,44 +119,46 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
 
   return (
     <div className="bg-surface overflow-hidden rounded-xl border">
-      <div className="bg-surface-muted/40 flex items-center justify-between gap-2 border-b px-3 py-2">
+      <div className="bg-surface-muted/40 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex items-center gap-2">
           {selectedRowCount > 0 ? (
             <span className="text-text-muted text-[11.5px]">
               <span className="text-text font-medium">{selectedRowCount}</span> selected
             </span>
           ) : (
-            <span className="text-text-muted text-[11.5px]">
-              <span className="text-text num font-medium">{total}</span> assets · page {page} of {totalPages}
+            <span className="text-text-muted text-[11.5px] num">
+              Showing <span className="text-text font-medium tabular-nums">{firstRow}</span>
+              {" – "}
+              <span className="text-text font-medium tabular-nums">{lastRow}</span>
+              {" of "}
+              <span className="text-text font-medium tabular-nums">{total}</span>
+              {" record"}
+              {total === 1 ? "" : "s"}
+              {" · page "}
+              <span className="tabular-nums">{page}</span>
+              {" of "}
+              <span className="tabular-nums">{totalPages}</span>
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          <Button variant="ghost" size="sm" onClick={handleExport} disabled={exporting || rows.length === 0}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting || rows.length === 0}
+          >
             {exporting ? <Loader2 className="animate-spin" /> : <Download />}
-            Export
+            Export to Excel
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm">
-                <Columns3 />
-                Columns
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[180px]">
-              <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {table.getAllLeafColumns().filter((c) => c.id !== "select").map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(v) => column.toggleVisibility(Boolean(v))}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ColumnPickerSheet
+            order={columnOrder}
+            visible={visibleSet}
+            onChange={({ order, visible }) => {
+              setColumnOrder(order);
+              setVisibleSet(new Set(visible));
+            }}
+          />
         </div>
       </div>
 
@@ -141,12 +169,14 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
               <tr key={group.id}>
                 {group.headers.map((header) => {
                   const meta = (header.column.columnDef.meta ?? {}) as AssetColumnMeta;
+                  const isAction = header.column.id === "action";
                   return (
                     <th
                       key={header.id}
                       className={cn(
                         "px-3 py-2 text-left font-medium text-[10.5px] uppercase tracking-[0.06em]",
                         meta.align === "right" && "text-right",
+                        isAction && "w-[88px] text-right",
                       )}
                     >
                       {meta.sortKey ? (
@@ -175,7 +205,10 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
           <tbody>
             {table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="text-text-muted py-12 text-center text-[12.5px]">
+                <td
+                  colSpan={table.getAllLeafColumns().length}
+                  className="text-text-muted py-12 text-center text-[12.5px]"
+                >
                   No assets match these filters.
                 </td>
               </tr>
@@ -197,7 +230,10 @@ export function AssetTable({ rows, total, page, pageSize, currentFilters }: Prop
                   return (
                     <td
                       key={cell.id}
-                      className={cn("px-3 py-2.5 align-middle", meta.align === "right" && "text-right")}
+                      className={cn(
+                        "px-3 py-2.5 align-middle",
+                        meta.align === "right" && "text-right",
+                      )}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

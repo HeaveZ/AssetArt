@@ -9,7 +9,7 @@ interface PaginatorProps {
   pageSize: number;
 }
 
-const ROWS_PER_PAGE_OPTIONS = [25, 50, 100, 200];
+const ROWS_PER_PAGE_OPTIONS = [10, 25, 50, 100, 200];
 
 export function AssetTablePaginator({ total, page, pageSize }: PaginatorProps) {
   const [, setQuery] = useQueryStates({

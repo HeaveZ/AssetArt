@@ -36,3 +36,25 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 
 export const magicLinkSchema = z.object({ email: emailSchema });
 export type MagicLinkInput = z.infer<typeof magicLinkSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required").max(128),
+    newPassword: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords don't match",
+  })
+  .refine((v) => v.newPassword !== v.currentPassword, {
+    path: ["newPassword"],
+    message: "New password must differ from current",
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(80),
+  image: z.string().url("Must be a valid URL").max(500).optional().or(z.literal("")),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

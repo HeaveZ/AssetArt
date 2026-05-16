@@ -4,15 +4,23 @@ import Link from "next/link";
 import { Bell, Plus, ScanLine, Search } from "lucide-react";
 import { Breadcrumbs } from "@/frontend/components/layout/breadcrumbs";
 import { CommandPalette, useCommandPalette } from "@/frontend/components/layout/command-palette";
+import { UserMenu } from "@/frontend/components/layout/user-menu";
 import { Button } from "@/frontend/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/frontend/components/ui/tooltip";
 import { toast } from "sonner";
+import type { Role } from "@prisma/client";
 
 interface TopBarProps {
   unreadAlerts?: number;
+  session: {
+    name: string | null;
+    email: string;
+    image: string | null;
+    role: Role;
+  };
 }
 
-export function TopBar({ unreadAlerts = 0 }: TopBarProps) {
+export function TopBar({ unreadAlerts = 0, session }: TopBarProps) {
   const { open, setOpen } = useCommandPalette();
 
   return (
@@ -94,6 +102,15 @@ export function TopBar({ unreadAlerts = 0 }: TopBarProps) {
               <Plus />
             </Link>
           </Button>
+
+          <span className="bg-border-subtle mx-1 h-5 w-px" aria-hidden="true" />
+
+          <UserMenu
+            name={session.name}
+            email={session.email}
+            image={session.image}
+            role={session.role}
+          />
         </div>
       </header>
 

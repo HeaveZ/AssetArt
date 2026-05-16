@@ -10,7 +10,9 @@ import {
   ArrowUpFromLine,
   Boxes,
   Building2,
+  CalendarClock,
   Download,
+  HelpCircle,
   KeyRound,
   LayoutDashboard,
   Map as MapIcon,
@@ -229,6 +231,26 @@ export function buildPaletteCommands(ctx: PaletteContext): PaletteCommand[] {
         </>
       ),
       run: go("/settings"),
+    },
+    {
+      id: "ws.help",
+      group: "Workspace",
+      label: "Help & Support",
+      icon: HelpCircle,
+      shortcut: (
+        <>
+          <kbd>G</kbd>
+          <kbd>H</kbd>
+        </>
+      ),
+      run: go("/help"),
+    },
+    {
+      id: "ws.changelog",
+      group: "Workspace",
+      label: "What's new — Changelog",
+      icon: CalendarClock,
+      run: go("/help/changelog"),
     },
     {
       id: "ws.sites",

@@ -39,7 +39,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-surface-muted">
       <AppSidebar workspace={workspace} session={activeSession} />
       <div className="lg:pl-[var(--sidebar-width)]">
-        <TopBar unreadAlerts={unreadAlerts} />
+        <TopBar
+          unreadAlerts={unreadAlerts}
+          session={{
+            name: activeSession.name,
+            email: activeSession.email,
+            image: activeSession.image,
+            role: activeSession.role,
+          }}
+        />
         <main className="px-4 py-5 sm:px-6 sm:py-6">{children}</main>
       </div>
     </div>

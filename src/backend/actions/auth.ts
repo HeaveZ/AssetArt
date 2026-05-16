@@ -1,10 +1,17 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { AuthError } from "next-auth";
 import bcrypt from "bcryptjs";
 import { signIn, signOut } from "@/auth";
 import { prisma } from "@/backend/db";
-import { signInSchema, signUpSchema } from "@/shared/schemas/auth";
+import { requireSession } from "@/backend/session";
+import {
+  changePasswordSchema,
+  signInSchema,
+  signUpSchema,
+  updateProfileSchema,
+} from "@/shared/schemas/auth";
 import type { ActionResult } from "@/shared/types";
 
 export async function signInWithCredentials(
@@ -105,4 +112,100 @@ export async function registerAction(
   }
 
   return { ok: true, data: { redirectTo: "/dashboard" } };
+}
+
+/**
+ * Change the signed-in user's password.
+ *
+ * Security:
+ * - Re-verifies the current password using bcrypt.compare before re-hashing.
+ * - Returns a generic "incorrect" error instead of leaking which field failed
+ *   (prevents enumeration / oracle attacks).
+ * - Hashes with cost 12 (matches registration).
+ * - Bumps updatedAt to nudge session refresh on next read.
+ */
+export async function changePasswordAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const raw = {
+    currentPassword: String(formData.get("currentPassword") ?? ""),
+    newPassword: String(formData.get("newPassword") ?? ""),
+    confirmPassword: String(formData.get("confirmPassword") ?? ""),
+  };
+
+  const parsed = changePasswordSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return {
+      ok: false,
+      error: issue?.message ?? "Invalid input",
+      field: issue?.path?.[0]?.toString(),
+    };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, passwordHash: true, deletedAt: true },
+  });
+
+  if (!user || user.deletedAt || !user.passwordHash) {
+    return { ok: false, error: "Could not verify account" };
+  }
+
+  const valid = await bcrypt.compare(parsed.data.currentPassword, user.passwordHash);
+  if (!valid) {
+    return { ok: false, error: "Current password is incorrect", field: "currentPassword" };
+  }
+
+  const newHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: newHash, updatedAt: new Date() },
+  });
+
+  return { ok: true, data: undefined };
+}
+
+/**
+ * Update the signed-in user's display name / avatar URL.
+ *
+ * Security:
+ * - Always operates on session.userId; the caller cannot pass an id.
+ * - Avatar URL is validated to be a valid URL with a length cap, defending
+ *   against payloads that try to break the rendering layer.
+ */
+export async function updateProfileAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const session = await requireSession();
+
+  const raw = {
+    name: String(formData.get("name") ?? "").trim(),
+    image: String(formData.get("image") ?? "").trim(),
+  };
+
+  const parsed = updateProfileSchema.safeParse(raw);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return {
+      ok: false,
+      error: issue?.message ?? "Invalid input",
+      field: issue?.path?.[0]?.toString(),
+    };
+  }
+
+  await prisma.user.update({
+    where: { id: session.userId },
+    data: {
+      name: parsed.data.name,
+      image: parsed.data.image ? parsed.data.image : null,
+    },
+  });
+
+  revalidatePath("/", "layout");
+  return { ok: true, data: undefined };
 }

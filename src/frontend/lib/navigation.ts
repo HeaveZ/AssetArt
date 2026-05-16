@@ -8,6 +8,7 @@ import {
   Boxes,
   ChartLine,
   FileChartColumn,
+  HelpCircle,
   KeyRound,
   LayoutDashboard,
   Map,
@@ -63,7 +64,13 @@ export const NAV: NavSection[] = [
     items: [
       { label: "Reports", href: "/reports", icon: FileChartColumn, shortcut: "G R" },
       { label: "Forecast", href: "/forecast", icon: ChartLine, badge: "beta" },
+    ],
+  },
+  {
+    title: "Workspace",
+    items: [
       { label: "Settings", href: "/settings", icon: Settings, shortcut: "G S" },
+      { label: "Help & Support", href: "/help", icon: HelpCircle, shortcut: "G H" },
     ],
   },
 ];

@@ -17,9 +17,13 @@ export type AssetListRow = {
   brand: string | null;
   model: string | null;
   serialNumber: string | null;
+  description: string | null;
   status: Prisma.AssetGetPayload<Record<string, never>>["status"];
+  cpu: string | null;
   memoryGB: number | null;
   storageGB: number | null;
+  displayInches: string | null;
+  os: string | null;
   category: { id: string; name: string } | null;
   site: { id: string; name: string } | null;
   location: { id: string; name: string } | null;
@@ -33,11 +37,7 @@ export type AssetListRow = {
 };
 
 export type AssetDetail = AssetListRow & {
-  description: string | null;
   notes: string | null;
-  displayInches: string | null;
-  cpu: string | null;
-  os: string | null;
 };
 
 const SORT_MAP: Record<AssetFiltersInput["sort"], string> = {
@@ -72,6 +72,9 @@ export async function listAssets(
   if (parsed.siteId?.length) where.siteId = { in: parsed.siteId };
   if (parsed.categoryId?.length) where.categoryId = { in: parsed.categoryId };
   if (parsed.assigneeId?.length) where.assigneeId = { in: parsed.assigneeId };
+  if (parsed.brand) where.brand = { contains: parsed.brand, mode: "insensitive" };
+  if (parsed.model) where.model = { contains: parsed.model, mode: "insensitive" };
+  if (parsed.serial) where.serialNumber = { contains: parsed.serial, mode: "insensitive" };
 
   const skip = (parsed.page - 1) * parsed.pageSize;
   const sortKey = SORT_MAP[parsed.sort];
@@ -100,9 +103,13 @@ export async function listAssets(
       brand: a.brand,
       model: a.model,
       serialNumber: a.serialNumber,
+      description: a.description,
       status: a.status,
+      cpu: a.cpu,
       memoryGB: a.memoryGB,
       storageGB: a.storageGB,
+      displayInches: a.displayInches ? a.displayInches.toString() : null,
+      os: a.os,
       category: a.category,
       site: a.site,
       location: a.location,
